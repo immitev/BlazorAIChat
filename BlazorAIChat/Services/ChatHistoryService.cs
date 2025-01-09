@@ -20,8 +20,6 @@ namespace BlazorAIChat.Services
         /// <summary>
         /// Constructor for ChatHistoryService.
         /// </summary>
-        /// <param name="config">Configuration object</param>
-        /// <param name="aIChatDBContext">SQLite database context</param>
         public ChatHistoryService(IOptions<AppSettings> settings)
         {
             var appSettings = settings.Value;

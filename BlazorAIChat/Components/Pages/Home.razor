@@ -704,7 +704,7 @@ else
                 return;
             }
 
-            // Only upload PDFs, DOCX, and TXT files
+            // Only upload PDFs, DOCX, XLSX, PPTX, TXT and image files files such as JPG, JPEG, PNG, and GIF
             var fileName = selectedFile.Name.ToLower();
             if (!(fileName.EndsWith(".pdf") || fileName.EndsWith(".docx") || fileName.EndsWith(".xlsx") || fileName.EndsWith(".pptx") || fileName.EndsWith(".txt") ||
                   (settings.AzureOpenAIChatCompletion.SupportsImages && (fileName.EndsWith(".jpg") || fileName.EndsWith(".jpeg") || fileName.EndsWith(".png") || fileName.EndsWith(".gif")))))
