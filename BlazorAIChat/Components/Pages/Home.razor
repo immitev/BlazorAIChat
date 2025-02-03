@@ -234,7 +234,7 @@ else
                                                         }
                                                         else
                                                         {
-                                                            <span class="display: inline">
+                                                            <span style="display: inline">
                                                                 @(new MarkupString(StripOuterParagraphTags(msg.Completion)))
                                                             </span>
 
@@ -527,41 +527,17 @@ else
 
                 //If we have URLs, we need to add them to kernel memory
                 SearchResult? searchData = null;
-                MemoryAnswer? answer = null;
                 if (urls.Count>0)
                 {
                     await ProcessURLsWithKernelMemory(urls);
 
                     //Remove urls from messageToProcess string.
                     string messageToProcessNoURLS = await GenerateNewPromptForMessagesWithUrl(messageToProcess);
-
-                    //See if we can get a direct answer, if not then search for relevant information
-                    answer = await kernelMemory!.AskAsync(messageToProcessNoURLS, currentSession.Id);
-                    if (answer.NoResult)
-                        searchData = await kernelMemory!.SearchAsync(messageToProcessNoURLS, currentSession.Id);
+                    searchData = await kernelMemory!.SearchAsync(messageToProcessNoURLS, currentSession.Id);
                 }
                 else
                 {
-                    //See if we can get a direct answer, if not then search for relevant information
-                    answer = await kernelMemory!.AskAsync(messageToProcess, currentSession.Id);
-                    if (answer.NoResult)
-                        searchData = await kernelMemory!.SearchAsync(messageToProcess, currentSession.Id);
-                }
-
-                if (!answer.NoResult)
-                {
-                    history.AddUserMessage("No matter what the question or request, base the response only on the information below.");
-                    history.AddUserMessage(answer.Result);
-                    history.AddUserMessage("----------------------------------");
-
-                    if (answer.RelevantSources.Count>0)
-                        foreach (var source in answer.RelevantSources)
-                        {
-                            if (source.SourceName.ToLower()!="content.url")
-                                message.Citations.Add($"{source.SourceName} ({(source.Partitions.Max(x=>x.Relevance)*100).ToString("F2")}%)");
-                            else
-                                message.Citations.Add($"<a href='{source.SourceUrl}' target='_blank'>{source.SourceUrl}</a> ({(source.Partitions.Max(x => x.Relevance) * 100).ToString("F2")}%)");
-                        }
+                    searchData = await kernelMemory!.SearchAsync(messageToProcess, currentSession.Id);
                 }
 
                 if (searchData!=null && !searchData.NoResult)
