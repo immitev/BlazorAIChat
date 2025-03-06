@@ -23,7 +23,6 @@
 @using BlazorAIChat.Utils
 @using BlazorAIChat.Services
 @using Microsoft.AspNetCore.Components.Authorization
-@using MarkdownSharp
 @using Microsoft.KernelMemory.AI
 @using Microsoft.KernelMemory.AI.OpenAI
 @using Microsoft.SemanticKernel
@@ -235,7 +234,7 @@ else
                                                         else
                                                         {
                                                             <span style="display: inline">
-                                                                @(new MarkupString(StripOuterParagraphTags(msg.Completion)))
+                                                                <assistant-message markdown="@msg.Completion"></assistant-message>
                                                             </span>
 
                                                             @if (msg.Citations.Count>0)
@@ -312,9 +311,6 @@ else
     private IChatCompletionService? chatCompletionService = null;
     private ChatHistory history = new ChatHistory();
     private ITextTokenizer? textTokenizer;
-
-    //Markdown processor
-    Markdown md = new Markdown();
 
     //Flags for UI
     bool showNeedsConfigure = false;
@@ -588,8 +584,6 @@ else
         try
         {
             var markdownBuilder = new StringBuilder();
-            var finalResults = new StringBuilder();
-
 
             await foreach (var chatUpdate in chatCompletionService.GetStreamingChatMessageContentsAsync(history))
             {
@@ -602,18 +596,16 @@ else
                 //If the chat update has content, then append it to the results
                 if (chatUpdate?.Content != null)
                 {
-                    finalResults.Append(chatUpdate.Content);
                     markdownBuilder.Append(chatUpdate.Content);
-                    string partialHTML = md.Transform(markdownBuilder.ToString());
+                    message.Completion = markdownBuilder.ToString();
 
-                    message.Completion = FixupTextForCode(partialHTML.ToString());
                     // Scroll to the bottom of the chat window
                     await js.InvokeVoidAsync("scrollToBottom", "MessagesInChatdiv");
                     StateHasChanged();
                 }
             }
-            message.Completion = md.Transform(FixupTextForCode(finalResults.ToString()));
-            history.AddAssistantMessage(finalResults.ToString());
+            message.Completion = markdownBuilder.ToString();
+            history.AddAssistantMessage(markdownBuilder.ToString());
 
             //store the chat session history
             await UpdateSessionAndMessage(currentSession?.Id ?? string.Empty, message);
@@ -889,22 +881,6 @@ else
         }
     }
 
-    // Fixes up the text for code blocks. This ensures that if the AI generates a code block it looks correct in the UI.
-    private string FixupTextForCode(string text)
-    {
-        Regex rgx = new Regex("```");
-        var matches = rgx.Matches(text);
-        if (matches.Count() > 0)
-            for (int i = 0; i < matches.Count; i++)
-                if (i % 2 == 0)
-                    // even = start code block tag
-                    text = rgx.Replace(text, "<pre><code>", 1, i);
-                else
-                    // odd = end code block tag
-                    text = rgx.Replace(text, "</pre></code>", 1, i);
-
-        return text;
-    }
 
     // Event handler for the NavMenu component for when a chat session is changed.
     public async void LoadChatEventHandlerAsync(Session session)

@@ -6,7 +6,8 @@ This is a sample .NET 8 Blazor Interactive Server application for chatting with 
 
 ## Components
 This solution utilizes several open source libraries to help with document ingestion and chat display. These projects include:
-* MarkdownSharp
+* dompurify
+* marked
 * Semantic Kernel
 * Semantic Memory
 
