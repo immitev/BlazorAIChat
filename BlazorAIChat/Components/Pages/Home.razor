@@ -199,7 +199,6 @@ else
                                                     <strong class="me-auto text-capitalize">User</strong>
                                                 </div>
                                                 <div class="toast-body">
-                                                    <i class="bi bi-grip-vertical mr-2 text-black-50"></i>
                                                     @if (msg.Prompt.StartsWith("data:image"))
                                                     {
                                                         <img style='max-height:300px; max-width:300px;' src='@msg.Prompt' />
@@ -219,8 +218,7 @@ else
                                                         <strong class="me-auto text-capitalize">Assistant</strong>
                                                     </div>
                                                     <div class="toast-body">
-                                                        <i class="bi bi-grip-vertical mr-2 text-black-50"></i>
-                                                    
+                                               
                                                         @if(string.IsNullOrEmpty(msg.Completion.Trim()))
                                                         {
                                                             <div class="chat-bubble">
