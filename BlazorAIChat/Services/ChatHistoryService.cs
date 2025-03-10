@@ -11,15 +11,15 @@ namespace BlazorAIChat.Services
 {
     public class ChatHistoryService
     {
-
         private readonly Container? _chatContainer;
         private readonly AIChatDBContext _aIChatDBContext;
-        private bool usesCosmosDb = false;
-
+        private readonly bool _usesCosmosDb;
 
         /// <summary>
         /// Constructor for ChatHistoryService.
+        /// Initializes the service with the provided settings.
         /// </summary>
+        /// <param name="settings">Application settings.</param>
         public ChatHistoryService(IOptions<AppSettings> settings)
         {
             var appSettings = settings.Value;
@@ -31,7 +31,7 @@ namespace BlazorAIChat.Services
 
             if (!string.IsNullOrEmpty(connectionString) && !string.IsNullOrEmpty(databaseName) && !string.IsNullOrEmpty(chatContainerName))
             {
-                usesCosmosDb = true;
+                _usesCosmosDb = true;
 
                 CosmosSerializationOptions options = new()
                 {
@@ -42,15 +42,13 @@ namespace BlazorAIChat.Services
                     .WithSerializerOptions(options)
                     .Build();
 
-
                 Database database = client.GetDatabase(databaseName)!;
                 Container chatContainer = database.CreateContainerIfNotExistsAsync(
                     id: chatContainerName,
                     partitionKeyPath: "/sessionId"
                 ).GetAwaiter().GetResult();
 
-                _chatContainer = chatContainer ??
-                    throw new ArgumentException("Unable to connect to existing Azure Cosmos DB container or database.");
+                _chatContainer = chatContainer ?? throw new ArgumentException("Unable to connect to existing Azure Cosmos DB container or database.");
             }
         }
 
@@ -61,10 +59,10 @@ namespace BlazorAIChat.Services
         /// <returns>Newly created chat session item.</returns>
         public async Task<Session> InsertSessionAsync(Session session)
         {
-            if (usesCosmosDb)
+            if (_usesCosmosDb)
             {
                 PartitionKey partitionKey = new(session.SessionId);
-                return await _chatContainer!.CreateItemAsync<Session>(
+                return await _chatContainer!.CreateItemAsync(
                     item: session,
                     partitionKey: partitionKey
                 );
@@ -84,12 +82,12 @@ namespace BlazorAIChat.Services
         /// <returns>Newly created chat message item.</returns>
         public async Task<Message> InsertMessageAsync(Message message)
         {
-            if (usesCosmosDb)
+            if (_usesCosmosDb)
             {
                 PartitionKey partitionKey = new(message.SessionId);
                 Message newMessage = message with { TimeStamp = DateTime.UtcNow };
-                return await _chatContainer!.CreateItemAsync<Message>(
-                    item: message,
+                return await _chatContainer!.CreateItemAsync(
+                    item: newMessage,
                     partitionKey: partitionKey
                 );
             }
@@ -102,14 +100,15 @@ namespace BlazorAIChat.Services
         }
 
         /// <summary>
-        /// Gets a list of all current chat sessions.
+        /// Gets a list of all current chat sessions for a specified user.
         /// </summary>
+        /// <param name="userId">User identifier to filter sessions.</param>
         /// <returns>List of distinct chat session items.</returns>
         public async Task<List<Session>> GetSessionsAsync(string userId)
         {
-            if (usesCosmosDb)
+            if (_usesCosmosDb)
             {
-                QueryDefinition query = new QueryDefinition($"SELECT DISTINCT * FROM c WHERE c.type = @type and c.userId=@userId")
+                QueryDefinition query = new QueryDefinition("SELECT DISTINCT * FROM c WHERE c.type = @type and c.userId=@userId")
                     .WithParameter("@type", nameof(Session))
                     .WithParameter("@userId", userId);
 
@@ -132,11 +131,11 @@ namespace BlazorAIChat.Services
         /// <summary>
         /// Gets a list of all current chat messages for a specified session identifier.
         /// </summary>
-        /// <param name="sessionId">Chat session identifier used to filter messsages.</param>
+        /// <param name="sessionId">Chat session identifier used to filter messages.</param>
         /// <returns>List of chat message items for the specified session.</returns>
         public async Task<List<Message>> GetSessionMessagesAsync(string sessionId)
         {
-            if (usesCosmosDb)
+            if (_usesCosmosDb)
             {
                 QueryDefinition query = new QueryDefinition("SELECT * FROM c WHERE c.sessionId = @sessionId AND c.type = @type")
                     .WithParameter("@sessionId", sessionId)
@@ -165,7 +164,7 @@ namespace BlazorAIChat.Services
         /// <returns>Revised created chat session item.</returns>
         public async Task<Session> UpdateSessionAsync(Session session)
         {
-            if (usesCosmosDb)
+            if (_usesCosmosDb)
             {
                 PartitionKey partitionKey = new(session.SessionId);
                 return await _chatContainer!.ReplaceItemAsync(
@@ -189,27 +188,19 @@ namespace BlazorAIChat.Services
         /// <returns>Chat session item.</returns>
         public async Task<Session> GetSessionAsync(string sessionId)
         {
-            if (usesCosmosDb)
+            if (_usesCosmosDb)
             {
-                ItemResponse<Session>? results = null;
                 PartitionKey partitionKey = new(sessionId);
-                results = await _chatContainer!.ReadItemAsync<Session>(
+                var results = await _chatContainer!.ReadItemAsync<Session>(
                     partitionKey: partitionKey,
                     id: sessionId
-                    );
+                );
                 return results;
             }
             else
             {
                 var results = await _aIChatDBContext.Sessions.FindAsync(sessionId);
-                if (results==null)
-                {
-                    return new Session();
-                }
-                else
-                {
-                    return results;
-                }
+                return results ?? new Session();
             }
         }
 
@@ -219,10 +210,9 @@ namespace BlazorAIChat.Services
         /// <param name="messages">Chat message and session items to create or replace.</param>
         public async Task UpsertSessionBatchAsync(params dynamic[] messages)
         {
-
-            if (usesCosmosDb)
+            if (_usesCosmosDb)
             {
-                //Make sure items are all in the same partition
+                // Make sure items are all in the same partition
                 if (messages.Select(m => m.SessionId).Distinct().Count() > 1)
                 {
                     throw new ArgumentException("All items must have the same partition key.");
@@ -242,30 +232,28 @@ namespace BlazorAIChat.Services
             {
                 foreach (var message in messages)
                 {
-                    if (message is Session)
+                    switch (message)
                     {
-                        //if the session is new, add it to the context else update the existing session
-                        if (await _aIChatDBContext.Sessions.FindAsync(message.SessionId) == null)
-                        {
-                            _aIChatDBContext.Sessions.Add(message);
-                        }
-                        else
-                        {
-                            _aIChatDBContext.Sessions.Update(message);
-                        }
-
-                    }
-                    else if (message is Message)
-                    {
-                        //if the message is new, add it to the context else update the existing message
-                        if (await _aIChatDBContext.Messages.FindAsync(message.Id) == null)
-                        {
-                            _aIChatDBContext.Messages.Add(message);
-                        }
-                        else
-                        {
-                            _aIChatDBContext.Messages.Update(message);
-                        }
+                        case Session session:
+                            if (await _aIChatDBContext.Sessions.FindAsync(session.SessionId) == null)
+                            {
+                                _aIChatDBContext.Sessions.Add(session);
+                            }
+                            else
+                            {
+                                _aIChatDBContext.Sessions.Update(session);
+                            }
+                            break;
+                        case Message msg:
+                            if (await _aIChatDBContext.Messages.FindAsync(msg.Id) == null)
+                            {
+                                _aIChatDBContext.Messages.Add(msg);
+                            }
+                            else
+                            {
+                                _aIChatDBContext.Messages.Update(msg);
+                            }
+                            break;
                     }
                 }
                 await _aIChatDBContext.SaveChangesAsync();
@@ -278,12 +266,12 @@ namespace BlazorAIChat.Services
         /// <param name="sessionId">Chat session identifier used to flag messages and sessions for deletion.</param>
         public async Task DeleteSessionAndMessagesAsync(string sessionId)
         {
-            if (usesCosmosDb)
+            if (_usesCosmosDb)
             {
                 PartitionKey partitionKey = new(sessionId);
 
                 QueryDefinition query = new QueryDefinition("SELECT VALUE c.id FROM c WHERE c.sessionId = @sessionId")
-                        .WithParameter("@sessionId", sessionId);
+                    .WithParameter("@sessionId", sessionId);
 
                 FeedIterator<string> response = _chatContainer!.GetItemQueryIterator<string>(query);
 
@@ -293,16 +281,14 @@ namespace BlazorAIChat.Services
                     FeedResponse<string> results = await response.ReadNextAsync();
                     foreach (var itemId in results)
                     {
-                        batch.DeleteItem(
-                            id: itemId
-                        );
+                        batch.DeleteItem(id: itemId);
                     }
                 }
                 await batch.ExecuteAsync();
             }
             else
             {
-                //delete all messages for the session
+                // Delete all messages for the session
                 List<Message> messages = await _aIChatDBContext.Messages.Where(m => m.SessionId == sessionId).ToListAsync();
                 if (messages.Count > 0)
                 {
@@ -310,7 +296,7 @@ namespace BlazorAIChat.Services
                     await _aIChatDBContext.SaveChangesAsync();
                 }
 
-                //delete the session
+                // Delete the session
                 var session = await _aIChatDBContext.Sessions.FindAsync(sessionId);
                 if (session != null)
                 {

@@ -10,7 +10,6 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-
 builder.Services.Configure<AppSettings>(builder.Configuration);
 builder.Services.AddHttpClient("retryHttpClient").AddPolicyHandler(RetryHelper.GetRetryPolicy());
 builder.Services.AddDbContext<AIChatDBContext>();
@@ -44,8 +43,6 @@ using (var scope = app.Services.CreateScope())
     var context = services.GetRequiredService<AIChatDBContext>();
     context.Database.Migrate();
 }
-
-
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
