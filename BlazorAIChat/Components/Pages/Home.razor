@@ -11,6 +11,7 @@
 
 @using BlazorAIChat.Components.Shared
 @using Microsoft.AspNetCore.Components.Web
+@using Microsoft.EntityFrameworkCore
 @using Microsoft.Extensions.Options;
 @using BlazorAIChat.Models
 @using BlazorAIChat.Utils
@@ -323,9 +324,15 @@ else
             currentUser = await userService.GetCurrentUserAsync();
 
         }
+        catch (HttpRequestException ex)
+        {
+            Console.WriteLine($"Network error while fetching current user: {ex.Message}");
+            ShowAlert("Network error while fetching current user. Please check your connection.", AlertTypeEnum.danger);
+        }
         catch (Exception ex)
         {
             Console.WriteLine($"Initialization error: {ex.Message}");
+            ShowAlert("An unexpected error occurred during initialization.", AlertTypeEnum.danger);
         }
 
         try
@@ -354,10 +361,15 @@ else
 
             StateHasChanged();
         }
+        catch (DbUpdateException ex)
+        {
+            Console.WriteLine($"Database error during initialization: {ex.Message}");
+            ShowAlert("Database error during initialization. Please try again later.", AlertTypeEnum.danger);
+        }
         catch (Exception ex)
         {
             Console.WriteLine($"Initialization error: {ex.Message}");
-            ShowAlert($"An error occurred while initializing the chat. {ex.Message}", AlertTypeEnum.danger);
+            ShowAlert("An unexpected error occurred during initialization.", AlertTypeEnum.danger);
         }
     }
 
@@ -443,11 +455,19 @@ else
                     isResponding = false;
                     StateHasChanged();
                 }
+                catch (HttpRequestException ex)
+                {
+                    isResponding = false;
+                    StateHasChanged();
+                    Console.WriteLine($"Network error while processing chat: {ex.Message}");
+                    ShowAlert("Network error while processing chat. Please check your connection.", AlertTypeEnum.danger);
+                }
                 catch (Exception ex)
                 {
                     isResponding = false;
                     StateHasChanged();
                     Console.WriteLine($"StreamChatCompletionAsync error: {ex.Message}");
+                    ShowAlert("An unexpected error occurred while processing the chat.", AlertTypeEnum.danger);
                 }
             }
         }
@@ -561,6 +581,12 @@ else
             isFileInputDisabled = false;
             StateHasChanged();
         }
+        catch (IOException ex)
+        {
+            ShowAlert($"File upload error: {ex.Message}", AlertTypeEnum.danger);
+            isFileInputDisabled = false;
+            Console.WriteLine($"UploadFile error: {ex.Message}");
+        }
         catch (Exception ex)
         {
             if (ex.Message.ToLower().Contains("corrupt"))
@@ -608,6 +634,11 @@ else
             StateHasChanged();
             await js.InvokeVoidAsync("scrollToBottom", "MessagesInChatdiv");
 
+        }
+        catch (InvalidOperationException ex)
+        {
+            ShowAlert($"Image processing error: {ex.Message}", AlertTypeEnum.danger);
+            Console.WriteLine($"ProcessImage error: {ex.Message}");
         }
         catch (Exception ex)
         {
@@ -717,40 +748,48 @@ else
     {
         messagesInChat ??= new List<Message>();
 
-        if (currentSession is not null)
+        try
         {
-            messagesInChat = await chatHistoryService.GetSessionMessagesAsync(currentSession.SessionId);
-        }
-
-        aiService.history.Clear();
-        aiService.history.AddSystemMessage(settings.SystemMessage);
-        if (messagesInChat.Count > 0)
-        {
-            foreach (var msg in messagesInChat)
+            if (currentSession is not null)
             {
-                switch (msg.Prompt)
-                {
-                    case string prompt when prompt.StartsWith("data:image"):
-                    {
-                        string mimeType = ExtractMimeType(msg.Prompt);
-                        byte[] imageData = Convert.FromBase64String(msg.Prompt.Substring(mimeType.Length + 13));
-                        using MemoryStream imageStream = new MemoryStream(imageData);
-                        aiService.AddImageToChat(imageStream, mimeType);
-                        break;
-                    }
-                    case string prompt when prompt.StartsWith("data:doc"):
-                        // Do nothing since the document is already in the memory store
-                        break;
-                    default:
-                        aiService.history.AddUserMessage(msg.Prompt);
-                        break;
-                }
-                aiService.history.AddAssistantMessage(msg.Completion);
+                messagesInChat = await chatHistoryService.GetSessionMessagesAsync(currentSession.SessionId);
             }
-        }
 
-        loadingComplete = true;
-        StateHasChanged();
+            aiService.history.Clear();
+            aiService.history.AddSystemMessage(settings.SystemMessage);
+            if (messagesInChat.Count > 0)
+            {
+                foreach (var msg in messagesInChat)
+                {
+                    switch (msg.Prompt)
+                    {
+                        case string prompt when prompt.StartsWith("data:image"):
+                        {
+                            string mimeType = ExtractMimeType(msg.Prompt);
+                            byte[] imageData = Convert.FromBase64String(msg.Prompt.Substring(mimeType.Length + 13));
+                            using MemoryStream imageStream = new MemoryStream(imageData);
+                            aiService.AddImageToChat(imageStream, mimeType);
+                            break;
+                        }
+                        case string prompt when prompt.StartsWith("data:doc"):
+                            // Do nothing since the document is already in the memory store
+                            break;
+                        default:
+                            aiService.history.AddUserMessage(msg.Prompt);
+                            break;
+                    }
+                    aiService.history.AddAssistantMessage(msg.Completion);
+                }
+            }
+
+            loadingComplete = true;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"ReloadChatMessagesAsync error: {ex.Message}");
+            ShowAlert("An error occurred while reloading chat messages.", AlertTypeEnum.danger);
+        }
     }
 
 
