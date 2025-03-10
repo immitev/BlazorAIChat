@@ -253,7 +253,7 @@ else
                         @if (currentSession is not null && currentSession?.SessionId != Models.Constants.EMPTY_SESSION)
                         {
                             <div class="input-group">
-                                <input type="text" class="form-control" placeholder="Enter your message" disabled="@isResponding" @bind="userMessage" @onkeydown="HandleKeyDown" />
+                                <input type="text" class="form-control" placeholder="Enter your message" disabled="@isResponding" @bind-value="userMessage" @bind-value:event="oninput" @onkeydown="HandleKeyDown" />
                                 <button class="btn btn-primary" @onclick="SendMessage">Send</button>
                                 <InputFile @ref="inputFile" class="btn btn-warning" OnChange="HandleFileSelected" disabled="@(isFileInputDisabled||isResponding)" />
                                 <button class="btn btn-secondary" @onclick="Stop">Stop</button>
@@ -500,7 +500,7 @@ else
     /// </summary>
     private async Task HandleKeyDown(KeyboardEventArgs e)
     {
-        if (e.Key == "Enter")
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(userMessage))
         {
             await SendMessage();
         }
