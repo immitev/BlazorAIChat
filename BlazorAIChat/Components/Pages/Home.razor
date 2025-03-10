@@ -382,7 +382,7 @@ else
 
                 //Create a new message object and add it to the mesaagesInChat list. This will allow the UI to display the message while the AI processes it.
                 Message message = new Message(currentSession.Id, userMessage);
-                messagesInChat.Add(message);
+                messagesInChat?.Add(message);
 
                 //We do this to ensure that the user message is displayed in the chat window since looking up kernelMemory may take a moment. We
                 //want the UI to feel responsive.
@@ -585,8 +585,7 @@ else
             uploadImageByteArray = memoryStream.ToArray();
             string base64Image = ConvertByteImageToBase64Data(uploadImageByteArray, uploadImageType);
             Message message = new Message(currentSession.Id, $"{base64Image}", "What would you like to know about that image?");
-            if (messagesInChat!=null && currentSession!=null)
-                messagesInChat.Add(message);
+            messagesInChat?.Add(message);
 
             //Add the image to the chat history so the AI can process it
             aiService.AddImageToChat(memoryStream, uploadImageType);
@@ -595,14 +594,12 @@ else
             await UpdateSessionAndMessage(currentSession?.Id ?? string.Empty, message);
             StateHasChanged();
             await js.InvokeVoidAsync("scrollToBottom", "MessagesInChatdiv");
-            return;
 
         }
         catch (Exception ex)
         {
             ShowAlert($"An error occurred while processing the image. {ex.Message}", AlertTypeEnum.danger);
             Console.WriteLine($"ProcessImage error: {ex.Message}");
-            return;
         }
     }
 
@@ -687,17 +684,18 @@ else
     }
 
     // Reloads the chat messages for the current session
-    public async Task ReloadChatMessagesAsync()
+    private async Task ReloadChatMessagesAsync()
     {
+        messagesInChat ??= new List<Message>();
+
         if (currentSession is not null)
         {
             messagesInChat = await chatHistoryService.GetSessionMessagesAsync(currentSession.SessionId);
         }
 
-        //setup chat history object
         aiService.history.Clear();
         aiService.history.AddSystemMessage(settings.SystemMessage);
-        if (messagesInChat != null && messagesInChat.Count > 0)
+        if (messagesInChat.Count > 0)
         {
             foreach (var msg in messagesInChat)
             {
@@ -705,13 +703,12 @@ else
                 {
                     string mimeType = ExtractMimeType(msg.Prompt);
                     byte[] imageData = Convert.FromBase64String(msg.Prompt.Substring(mimeType.Length + 13));
-                    //create a new memory stream from the byte array
                     using MemoryStream imageStream = new MemoryStream(imageData);
                     aiService.AddImageToChat(imageStream, mimeType);
                 }
                 else if (msg.Prompt.StartsWith("data:doc"))
                 {
-                    //Do nothing since the document is already in the memory store
+                    // Do nothing since the document is already in the memory store
                 }
                 else
                 {
@@ -721,11 +718,10 @@ else
             }
         }
 
-
         loadingComplete = true;
-
         StateHasChanged();
     }
+
 
     // Updates the session and message data in the chat history.
     private async Task UpdateSessionAndMessage(string sessionId, Message chatMessage)

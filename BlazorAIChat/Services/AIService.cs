@@ -1,63 +1,62 @@
-﻿using BlazorAIChat.Models;
+﻿#nullable enable
+
+using BlazorAIChat.Models;
+using BlazorAIChat.Utils;
 using Microsoft.Extensions.Options;
-using Microsoft.KernelMemory.AI;
 using Microsoft.KernelMemory;
+using Microsoft.KernelMemory.AI;
+using Microsoft.KernelMemory.AI.OpenAI;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.Agents;
-using Microsoft.KernelMemory.AI.OpenAI;
 using Microsoft.SemanticKernel.ChatCompletion;
-using Microsoft.EntityFrameworkCore;
-using BlazorAIChat.Utils;
-using System.Threading.Tasks;
-using UglyToad.PdfPig.Fonts.TrueType.Names;
-using Microsoft.SemanticKernel.Services;
-using System.Net.Http;
-using System.Text;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
+using System.Text;
 
 namespace BlazorAIChat.Services
 {
+    /// <summary>
+    /// The AIService class provides various AI-related functionalities such as chat completion, document processing, and session summarization.
+    /// </summary>
     public class AIService
     {
 #pragma warning disable SKEXP0010, SKEXP0001, SKEXP0020, KMEXP00
         private readonly AppSettings settings;
-        private Kernel kernel;
-        private MemoryServerless? kernelMemory = null;
-        private HttpClient? httpClient;
-        private ITextTokenizer? textTokenizer;
-        private IChatCompletionService? chatCompletionService = null;
+        private readonly Kernel kernel;
+        private readonly MemoryServerless? kernelMemory;
+        private readonly HttpClient? httpClient;
+        private readonly ITextTokenizer? textTokenizer;
+        private readonly IChatCompletionService? chatCompletionService;
         public ChatHistory history { get; private set; } = new ChatHistory();
-        private AIChatDBContext dbContext;
-        private ChatCompletionAgent sessionSummaryAgent;
+        private readonly AIChatDBContext dbContext;
+        private readonly ChatCompletionAgent sessionSummaryAgent;
         private readonly ChatHistoryService chatHistoryService;
 
-        public AIService(IOptions<AppSettings> appSettings, ChatHistoryService chatHistoryService,IHttpClientFactory httpClientFactory, AIChatDBContext dbContext)
+        /// <summary>
+        /// Initializes a new instance of the <see cref="AIService"/> class.
+        /// </summary>
+        /// <param name="appSettings">The application settings.</param>
+        /// <param name="chatHistoryService">The chat history service.</param>
+        /// <param name="httpClientFactory">The HTTP client factory.</param>
+        /// <param name="dbContext">The database context.</param>
+        public AIService(IOptions<AppSettings> appSettings, ChatHistoryService chatHistoryService, IHttpClientFactory httpClientFactory, AIChatDBContext dbContext)
         {
             this.dbContext = dbContext;
             this.chatHistoryService = chatHistoryService;
 
-            //Get the app settings from the appsettings.json file or App Service configuration
             settings = appSettings.Value;
-
-            //setup the HttpClient that has Retry policy
             httpClient = httpClientFactory.CreateClient("retryHttpClient");
-
-            //Setup the Tokenizer to use
             textTokenizer = new GPT4Tokenizer();
 
-            //Configurate Semantic Kernel
-            // Create a kernel builder with Azure OpenAI chat completion. Both chat completion and embedding use the same OpenAI endpoint and key.
+            // Create a Kernel builder and add Azure OpenAI services for chat completion and text embedding generation
             var builder = Kernel.CreateBuilder()
-            .AddAzureOpenAIChatCompletion(settings.AzureOpenAIChatCompletion.Model, settings.AzureOpenAIChatCompletion.Endpoint, settings.AzureOpenAIChatCompletion.ApiKey, httpClient: httpClient)
-            .AddAzureOpenAITextEmbeddingGeneration(settings.AzureOpenAIEmbedding.Model, settings.AzureOpenAIChatCompletion.Endpoint, settings.AzureOpenAIChatCompletion.ApiKey, httpClient: httpClient);
+                .AddAzureOpenAIChatCompletion(settings.AzureOpenAIChatCompletion.Model, settings.AzureOpenAIChatCompletion.Endpoint, settings.AzureOpenAIChatCompletion.ApiKey, httpClient: httpClient)
+                .AddAzureOpenAITextEmbeddingGeneration(settings.AzureOpenAIEmbedding.Model, settings.AzureOpenAIChatCompletion.Endpoint, settings.AzureOpenAIChatCompletion.ApiKey, httpClient: httpClient);
 
-            // Add enterprise components
+            // Add logging services
             builder.Services.AddLogging(services => services.AddConsole().SetMinimumLevel(LogLevel.Trace));
-
-            // Build the kernel
             kernel = builder.Build();
 
-            //Define chat completion Agent for creating a chat session name
+            // Initialize the session summary agent with specific instructions
             sessionSummaryAgent = new()
             {
                 Name = "SessionSummaryAgent",
@@ -73,35 +72,32 @@ namespace BlazorAIChat.Services
                     })
             };
 
-            //Set file directory for storing knowledge if PostgreSQL or Azure AI Search is not used
             var knnDirectory = "KNN";
 
-            //Setup the memory store
+            // Build kernel memory with various configurations based on settings
             var kernelMemoryBuilder = new KernelMemoryBuilder()
-            .WithAzureOpenAITextEmbeddingGeneration(new AzureOpenAIConfig
-            {
-                APIType = AzureOpenAIConfig.APITypes.EmbeddingGeneration,
-                Endpoint = settings.AzureOpenAIChatCompletion.Endpoint,
-                Deployment = settings.AzureOpenAIEmbedding.Model,
-                Auth = AzureOpenAIConfig.AuthTypes.APIKey,
-                APIKey = settings.AzureOpenAIChatCompletion.ApiKey,
-                MaxTokenTotal = settings.AzureOpenAIEmbedding.MaxInputTokens,
-                MaxRetries = 3
-            },
-                httpClient: httpClient)
-            .WithAzureOpenAITextGeneration(new AzureOpenAIConfig
-            {
-                APIType = AzureOpenAIConfig.APITypes.ChatCompletion,
-                Endpoint = settings.AzureOpenAIChatCompletion.Endpoint,
-                Deployment = settings.AzureOpenAIChatCompletion.Model,
-                Auth = AzureOpenAIConfig.AuthTypes.APIKey,
-                APIKey = settings.AzureOpenAIChatCompletion.ApiKey,
-                MaxTokenTotal = settings.AzureOpenAIChatCompletion.MaxInputTokens,
-                MaxRetries = 3
-            }, httpClient: httpClient, textTokenizer: textTokenizer);
+                .WithAzureOpenAITextEmbeddingGeneration(new AzureOpenAIConfig
+                {
+                    APIType = AzureOpenAIConfig.APITypes.EmbeddingGeneration,
+                    Endpoint = settings.AzureOpenAIChatCompletion.Endpoint,
+                    Deployment = settings.AzureOpenAIEmbedding.Model,
+                    Auth = AzureOpenAIConfig.AuthTypes.APIKey,
+                    APIKey = settings.AzureOpenAIChatCompletion.ApiKey,
+                    MaxTokenTotal = settings.AzureOpenAIEmbedding.MaxInputTokens,
+                    MaxRetries = 3
+                }, httpClient: httpClient)
+                .WithAzureOpenAITextGeneration(new AzureOpenAIConfig
+                {
+                    APIType = AzureOpenAIConfig.APITypes.ChatCompletion,
+                    Endpoint = settings.AzureOpenAIChatCompletion.Endpoint,
+                    Deployment = settings.AzureOpenAIChatCompletion.Model,
+                    Auth = AzureOpenAIConfig.AuthTypes.APIKey,
+                    APIKey = settings.AzureOpenAIChatCompletion.ApiKey,
+                    MaxTokenTotal = settings.AzureOpenAIChatCompletion.MaxInputTokens,
+                    MaxRetries = 3
+                }, httpClient: httpClient, textTokenizer: textTokenizer);
 
-
-            //If Azure AI Search is configured, we use that for storage
+            // Configure kernel memory based on specific settings
             if (settings.UsesAzureAISearch)
             {
                 kernelMemoryBuilder = kernelMemoryBuilder.WithAzureAISearchMemoryDb(new AzureAISearchConfig()
@@ -111,12 +107,9 @@ namespace BlazorAIChat.Services
                     Auth = AzureAISearchConfig.AuthTypes.APIKey,
                     UseHybridSearch = false
                 });
-
             }
             else if (settings.UsesPostgreSQL)
             {
-                //Use PostgreSQL DB memory store
-                //NOTE: You must have enabled pgvector extension in your PostgreSQL database for this to work.
                 kernelMemoryBuilder = kernelMemoryBuilder.WithPostgresMemoryDb(new PostgresConfig()
                 {
                     ConnectionString = settings.ConnectionStrings.PostgreSQL
@@ -124,11 +117,10 @@ namespace BlazorAIChat.Services
             }
             else
             {
-                //Use file memory store
                 kernelMemoryBuilder = kernelMemoryBuilder.WithSimpleVectorDb(new Microsoft.KernelMemory.MemoryStorage.DevTools.SimpleVectorDbConfig { StorageType = Microsoft.KernelMemory.FileSystem.DevTools.FileSystemTypes.Disk, Directory = knnDirectory });
             }
 
-            //Configure document intelligence if configured
+            // Add Azure Document Intelligence if supported
             if (!settings.AzureOpenAIChatCompletion.SupportsImages && settings.UsesAzureDocIntelligence)
             {
                 kernelMemoryBuilder = kernelMemoryBuilder.WithAzureAIDocIntel(new AzureAIDocIntelConfig()
@@ -139,75 +131,91 @@ namespace BlazorAIChat.Services
                 });
             }
 
-            //Build the memory store
             kernelMemory = kernelMemoryBuilder.Build<MemoryServerless>();
-
-            //Get reference to the chat completion service
             chatCompletionService = kernel.GetRequiredService<IChatCompletionService>();
         }
 
-
+        /// <summary>
+        /// Processes a list of URLs with kernel memory.
+        /// </summary>
+        /// <param name="urls">The list of URLs to process.</param>
+        /// <param name="currentSession">The current session.</param>
+        /// <param name="currentUser">The current user.</param>
         private async Task ProcessURLsWithKernelMemory(List<string> urls, Session? currentSession, User currentUser)
         {
-            if (kernelMemory != null && currentSession!=null)
+            if (kernelMemory != null && currentSession != null)
             {
                 string index = currentSession.SessionId;
-                TagCollection tags = new TagCollection();
-                tags.Add("user", currentUser.Id);
+                TagCollection tags = new TagCollection { { "user", currentUser.Id } };
                 foreach (var url in urls)
                 {
-                    //check if the url is already in the session
+                    // Check if the document already exists in the database
                     var doc = dbContext.SessionDocuments.FirstOrDefault(d => d.FileNameOrUrl == url && d.SessionId == index);
                     if (doc == null)
                     {
                         var docId = Guid.NewGuid().ToString();
-                        await kernelMemory.ImportWebPageAsync(url, docId, tags, index);
-                        while (!await kernelMemory.IsDocumentReadyAsync(docId, index))
+                        // Import the web page into kernel memory
+                        await kernelMemory.ImportWebPageAsync(url, docId, tags, index).ConfigureAwait(false);
+                        // Wait until the document is ready
+                        while (!await kernelMemory.IsDocumentReadyAsync(docId, index).ConfigureAwait(false))
                         {
-                            Thread.Sleep(500);
+                            await Task.Delay(500).ConfigureAwait(false);
                         }
+                        // Add the document to the database
                         dbContext.SessionDocuments.Add(new SessionDocument() { DocId = docId, FileNameOrUrl = url, SessionId = index });
-                        dbContext.SaveChanges();
+                        await dbContext.SaveChangesAsync().ConfigureAwait(false);
                     }
                 }
             }
         }
 
-        public async Task<IAsyncEnumerable<StreamingChatMessageContent>> GetChatResponseAsync(string prompt, Message message,Session currentSession,User currentUser)
+        /// <summary>
+        /// Gets the chat response asynchronously.
+        /// </summary>
+        /// <param name="prompt">The prompt for the chat.</param>
+        /// <param name="message">The message object.</param>
+        /// <param name="currentSession">The current session.</param>
+        /// <param name="currentUser">The current user.</param>
+        /// <returns>An asynchronous enumerable of streaming chat message content.</returns>
+        public async Task<IAsyncEnumerable<StreamingChatMessageContent>> GetChatResponseAsync(string prompt, Message message, Session currentSession, User currentUser)
         {
             ArgumentNullException.ThrowIfNull(textTokenizer);
             ArgumentNullException.ThrowIfNull(chatCompletionService);
 
-            await DoRAG(prompt, message, currentSession, currentUser);
-            
-            //Clean up history and remove old non-system messages in order to stay below our MaxInputTokens limit.
-            //This is not the most efficient way to do this, but it is simple and works for this demo.
+            // Perform Retrieval-Augmented Generation (RAG) on the prompt
+            await DoRAG(prompt, message, currentSession, currentUser).ConfigureAwait(false);
+
+            // Clean up the chat history to fit within the token limit
             history = AIUtils.CleanUpHistory(history, textTokenizer, settings.AzureOpenAIChatCompletion.MaxInputTokens);
-            
+
+            // Get the chat response as a stream of messages
             return chatCompletionService.GetStreamingChatMessageContentsAsync(history);
         }
 
+        /// <summary>
+        /// Performs Retrieval-Augmented Generation (RAG) on the given prompt.
+        /// </summary>
+        /// <param name="prompt">The prompt for the chat.</param>
+        /// <param name="message">The message object.</param>
+        /// <param name="currentSession">The current session.</param>
+        /// <param name="currentUser">The current user.</param>
         private async Task DoRAG(string prompt, Message message, Session currentSession, User currentUser)
         {
-           
-
-            //Pull out any URLs from the message
             var urls = StringUtils.GetURLsFromString(prompt);
-
-            //If we have URLs, we need to add them to kernel memory
             SearchResult? searchData = null;
             if (urls.Count > 0)
             {
-                await ProcessURLsWithKernelMemory(urls,currentSession,currentUser);
-
-                //Remove urls from messageToProcess string.
-                string messageToProcessNoURLS = await GenerateNewPromptForMessagesWithUrl(prompt);
-              
-                searchData = await kernelMemory!.SearchAsync(messageToProcessNoURLS, currentSession.Id);
+                // Process URLs with kernel memory
+                await ProcessURLsWithKernelMemory(urls, currentSession, currentUser).ConfigureAwait(false);
+                // Generate a new prompt without URLs
+                string messageToProcessNoURLS = await GenerateNewPromptForMessagesWithUrl(prompt).ConfigureAwait(false);
+                // Search the kernel memory with the new prompt
+                searchData = await kernelMemory!.SearchAsync(messageToProcessNoURLS, currentSession.Id).ConfigureAwait(false);
             }
             else
             {
-                searchData = await kernelMemory!.SearchAsync(prompt, currentSession.Id);
+                // Search the kernel memory with the original prompt
+                searchData = await kernelMemory!.SearchAsync(prompt, currentSession.Id).ConfigureAwait(false);
             }
 
             if (searchData != null && !searchData.NoResult)
@@ -219,29 +227,33 @@ namespace BlazorAIChat.Services
                     {
                         foreach (var p in result.Partitions)
                         {
+                            // Add the search result text to the chat history
                             history.AddUserMessage(p.Text);
                         }
 
-                        //Add the source to the message
+                        // Add citations to the message
                         if (result.SourceName.ToLower() != "content.url")
                             message.Citations.Add($"{result.SourceName} ({(result.Partitions.Max(x => x.Relevance) * 100).ToString("F2")}%)");
                         else
                             message.Citations.Add($"<a href='{result.SourceUrl}' target='_blank'>{result.SourceUrl}</a> ({(result.Partitions.Max(x => x.Relevance) * 100).ToString("F2")}%)");
-
                     }
                     history.AddUserMessage("----------------------------------");
                 }
             }
 
-            //Add the user message to the chat history
+            // Add the original prompt to the chat history
             history.AddUserMessage(prompt);
         }
 
+        /// <summary>
+        /// Generates a new prompt by removing URLs from the given message.
+        /// </summary>
+        /// <param name="theMessage">The message containing URLs.</param>
+        /// <returns>The new prompt without URLs.</returns>
         private async Task<string> GenerateNewPromptForMessagesWithUrl(string theMessage)
         {
             ArgumentNullException.ThrowIfNull(chatCompletionService);
 
-            string completionText = string.Empty;
             var skChatHistory = new ChatHistory();
             skChatHistory.AddSystemMessage("Rewrite the user prompt to remove all URLs but still make the question or request understandable.");
             skChatHistory.AddUserMessage(theMessage);
@@ -253,101 +265,119 @@ namespace BlazorAIChat.Services
                 }
             };
 
-            var result = await chatCompletionService.GetChatMessageContentAsync(skChatHistory, settings);
-            completionText = result.Items[0].ToString()!;
-            return completionText;
+            // Get the rewritten prompt from the chat completion service
+            var result = await chatCompletionService.GetChatMessageContentAsync(skChatHistory, settings).ConfigureAwait(false);
+            return result.Items[0].ToString()!;
         }
 
+        /// <summary>
+        /// Summarizes the chat session name asynchronously.
+        /// </summary>
+        /// <param name="sessionId">The session identifier.</param>
+        /// <returns>The summarized session name.</returns>
         public async Task<string> SummarizeChatSessionNameAsync(string? sessionId)
         {
             ArgumentNullException.ThrowIfNull(sessionId);
             ArgumentNullException.ThrowIfNull(chatCompletionService);
 
-            //Get the messages for the session
-            List<Message> messages = await chatHistoryService.GetSessionMessagesAsync(sessionId);
+            // Get all messages from the session
+            var messages = await chatHistoryService.GetSessionMessagesAsync(sessionId).ConfigureAwait(false);
+            var conversationText = string.Join(" ", messages.Select(m => m.Prompt + " " + m.Completion));
 
-            //Create a conversation string from the messages
-            string conversationText = string.Join(" ", messages.Select(m => m.Prompt + " " + m.Completion));
-
-            //Use sessionSummaryAgent to summarize the conversation into a session title
-            ChatHistory sessionSummary = [new ChatMessageContent(AuthorRole.User, conversationText)];
+            // Create a chat history with the entire conversation
+            ChatHistory sessionSummary = new() { new ChatMessageContent(AuthorRole.User, conversationText) };
             StringBuilder output = new();
-            await foreach (ChatMessageContent response in sessionSummaryAgent.InvokeAsync(sessionSummary))
+            // Get the summary from the session summary agent
+            await foreach (var response in sessionSummaryAgent.InvokeAsync(sessionSummary).ConfigureAwait(false))
             {
                 output.Append(response.ToString());
             }
-            string completionText = output.ToString();
+            var completionText = output.ToString();
 
-            Session session = await chatHistoryService.GetSessionAsync(sessionId);
+            // Update the session name with the summary
+            var session = await chatHistoryService.GetSessionAsync(sessionId).ConfigureAwait(false);
             session.Name = completionText;
-            await chatHistoryService.UpdateSessionAsync(session);
+            await chatHistoryService.UpdateSessionAsync(session).ConfigureAwait(false);
             return completionText;
         }
 
-        //Processes the uploaded file with Kernel Memory and stores the embeddings in the configured storage system.
+        /// <summary>
+        /// Processes documents with kernel memory.
+        /// </summary>
+        /// <param name="memoryStream">The memory stream of the document.</param>
+        /// <param name="filename">The filename of the document.</param>
+        /// <param name="currentSession">The current session.</param>
+        /// <param name="currentUser">The current user.</param>
+        /// <returns>A boolean indicating whether the document was processed successfully.</returns>
         public async Task<bool> ProcessDocsWithKernelMemory(MemoryStream memoryStream, string filename, Session currentSession, User currentUser)
         {
             ArgumentNullException.ThrowIfNull(kernelMemory);
 
-            //Let's see if the document already is in the session, If so give a notification and then return.
+            // Check if the document already exists in the database
             var doc = dbContext.SessionDocuments.FirstOrDefault(d => d.FileNameOrUrl == filename && d.SessionId == currentSession.SessionId);
             if (doc != null)
             {
-                //ShowAlert("The document you uploaded is already in the chat session.", AlertTypeEnum.warning);
                 return false;
             }
 
-            //Prep variables for processing
             var docId = Guid.NewGuid().ToString();
             string index = currentSession.SessionId;
-            TagCollection tags = new TagCollection();
-            tags.Add("user", currentUser.Id);
+            TagCollection tags = new TagCollection { { "user", currentUser.Id } };
             memoryStream.Position = 0;
 
-            await kernelMemory.ImportDocumentAsync(memoryStream, filename, docId, tags, index);
+            // Import the document into kernel memory
+            await kernelMemory.ImportDocumentAsync(memoryStream, filename, docId, tags, index).ConfigureAwait(false);
 
-            //Add record to database about document
+            // Add the document to the database
             dbContext.SessionDocuments.Add(new SessionDocument() { DocId = docId, FileNameOrUrl = filename, SessionId = index });
-            dbContext.SaveChanges();
+            await dbContext.SaveChangesAsync().ConfigureAwait(false);
 
-            while (!await kernelMemory.IsDocumentReadyAsync(docId, index))
+            // Wait until the document is ready
+            while (!await kernelMemory.IsDocumentReadyAsync(docId, index).ConfigureAwait(false))
             {
-                Thread.Sleep(1000);
+                await Task.Delay(1000).ConfigureAwait(false);
             }
 
             return true;
-    
         }
 
-        // Deletes the uploaded documents from the memory store
-        public async Task<bool> DeleteUploadedDocs(string sessionIdToDelete)
+        /// <summary>
+        /// Deletes uploaded documents for a given session.
+        /// </summary>
+        /// <param name="sessionIdToDelete">The session identifier to delete documents for.</param>
+        /// <returns>A boolean indicating whether the documents were deleted successfully.</returns>
+        public async Task<bool> DeleteUploadedDocs(string? sessionIdToDelete)
         {
             if (!string.IsNullOrEmpty(sessionIdToDelete))
             {
-
                 if (kernelMemory != null)
-                    await kernelMemory.DeleteIndexAsync(sessionIdToDelete);
+                    await kernelMemory.DeleteIndexAsync(sessionIdToDelete).ConfigureAwait(false);
 
-                //Delete the documents from the database
+                // Remove documents from the database
                 var docs = dbContext.SessionDocuments.Where(d => d.SessionId == sessionIdToDelete);
                 dbContext.SessionDocuments.RemoveRange(docs);
-                dbContext.SaveChanges();
+                await dbContext.SaveChangesAsync().ConfigureAwait(false);
 
                 return true;
             }
             return false;
         }
 
+        /// <summary>
+        /// Adds an image to the chat.
+        /// </summary>
+        /// <param name="imageStream">The memory stream of the image.</param>
+        /// <param name="uploadImageType">The type of the uploaded image.</param>
+        /// <returns>A boolean indicating whether the image was added successfully.</returns>
         public bool AddImageToChat(MemoryStream imageStream, string uploadImageType)
         {
-            //Add the image to the chat history so the AI can process it
             var sendMessage = new ChatMessageContentItemCollection
             {
-                new ImageContent(){Data=imageStream.ToArray(), MimeType = uploadImageType }
+                new ImageContent { Data = imageStream.ToArray(), MimeType = uploadImageType }
             };
+            // Add the image to the chat history
             history.AddUserMessage(sendMessage);
             return true;
         }
-
     }
 }
