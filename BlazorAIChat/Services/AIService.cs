@@ -3,7 +3,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.KernelMemory.AI;
 using Microsoft.KernelMemory;
 using Microsoft.SemanticKernel;
-using System.Net.Http;
+using Microsoft.SemanticKernel.Agents;
 using Microsoft.KernelMemory.AI.OpenAI;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.EntityFrameworkCore;
@@ -11,6 +11,9 @@ using BlazorAIChat.Utils;
 using System.Threading.Tasks;
 using UglyToad.PdfPig.Fonts.TrueType.Names;
 using Microsoft.SemanticKernel.Services;
+using System.Net.Http;
+using System.Text;
+using Microsoft.SemanticKernel.Connectors.OpenAI;
 
 namespace BlazorAIChat.Services
 {
@@ -25,6 +28,7 @@ namespace BlazorAIChat.Services
         private IChatCompletionService? chatCompletionService = null;
         public ChatHistory history { get; private set; } = new ChatHistory();
         private AIChatDBContext dbContext;
+        private ChatCompletionAgent sessionSummaryAgent;
         private readonly ChatHistoryService chatHistoryService;
 
         public AIService(IOptions<AppSettings> appSettings, ChatHistoryService chatHistoryService,IHttpClientFactory httpClientFactory, AIChatDBContext dbContext)
@@ -52,6 +56,22 @@ namespace BlazorAIChat.Services
 
             // Build the kernel
             kernel = builder.Build();
+
+            //Define chat completion Agent for creating a chat session name
+            sessionSummaryAgent = new()
+            {
+                Name = "SessionSummaryAgent",
+                Kernel = kernel,
+                Instructions = """
+                    Summarize this text. One to three words maximum length.
+                    Plain text only. No punctuation, markup or tags.
+                """,
+                Arguments = new KernelArguments(
+                    new OpenAIPromptExecutionSettings()
+                    {
+                        Temperature = 0
+                    })
+            };
 
             //Set file directory for storing knowledge if PostgreSQL or Azure AI Search is not used
             var knnDirectory = "KNN";
@@ -243,34 +263,20 @@ namespace BlazorAIChat.Services
             ArgumentNullException.ThrowIfNull(sessionId);
             ArgumentNullException.ThrowIfNull(chatCompletionService);
 
-            string _summarizePrompt = @"
-            Summarize this text. One to three words maximum length.
-            Plain text only. No punctuation, markup or tags.";
-
             //Get the messages for the session
             List<Message> messages = await chatHistoryService.GetSessionMessagesAsync(sessionId);
 
             //Create a conversation string from the messages
             string conversationText = string.Join(" ", messages.Select(m => m.Prompt + " " + m.Completion));
 
-            //Send to Semantic Kernel to summarize the conversation
-            string completionText = "New Chat";
-            var skChatHistory = new ChatHistory();
-            skChatHistory.AddSystemMessage(_summarizePrompt);
-            skChatHistory.AddUserMessage(conversationText);
-
-            PromptExecutionSettings settings = new()
+            //Use sessionSummaryAgent to summarize the conversation into a session title
+            ChatHistory sessionSummary = [new ChatMessageContent(AuthorRole.User, conversationText)];
+            StringBuilder output = new();
+            await foreach (ChatMessageContent response in sessionSummaryAgent.InvokeAsync(sessionSummary))
             {
-                ExtensionData = new Dictionary<string, object>()
-            {
-                { "Temperature", 0.0 },
-                { "TopP", 1.0 },
-                { "MaxTokens", 100 }
+                output.Append(response.ToString());
             }
-            };
-
-            var result = await chatCompletionService.GetChatMessageContentAsync(skChatHistory, settings);
-            completionText = result.Items[0].ToString()!;
+            string completionText = output.ToString();
 
             Session session = await chatHistoryService.GetSessionAsync(sessionId);
             session.Name = completionText;
