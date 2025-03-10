@@ -308,7 +308,9 @@ else
     //Application settings from appsettings.json or AppSerivce configuration
     AppSettings settings = new AppSettings();
 
-    // Initialization of the page
+    /// <summary>
+    /// Initializes the page and loads necessary data.
+    /// </summary>
     protected override async Task OnInitializedAsync()
     {
 
@@ -359,7 +361,9 @@ else
         }
     }
 
-    //Flags that the user has requested the AI to stop responding
+    /// <summary>
+    /// Flags that the user has requested the AI to stop responding.
+    /// </summary>
     private void Stop()
     {
         if (isResponding)
@@ -369,22 +373,24 @@ else
     }
 
 
-    //Handles the user's message and sends it to the AI for processing
+    /// <summary>
+    /// Handles the user's message and sends it to the AI for processing.
+    /// </summary>
     private async Task SendMessage()
     {
         try
         {
-            if (!string.IsNullOrWhiteSpace(userMessage) && currentSession!=null)
+            if (!string.IsNullOrWhiteSpace(userMessage) && currentSession is not null)
             {
 
-                //The user previously requested to stop responding, so reset the flag so it can respond to the new message
+                //Set the flag to indicate that it can respond.
                 stopResponding = false;
 
                 //Create a new message object and add it to the mesaagesInChat list. This will allow the UI to display the message while the AI processes it.
                 Message message = new Message(currentSession.Id, userMessage);
                 messagesInChat?.Add(message);
 
-                //We do this to ensure that the user message is displayed in the chat window since looking up kernelMemory may take a moment. We
+                //We do this to ensure that the user message is displayed in the chat window since calling the AI may take a moment. We
                 //want the UI to feel responsive.
                 string messageToProcess = userMessage;
                 userMessage = string.Empty;
@@ -426,10 +432,10 @@ else
                     await UpdateSessionAndMessage(currentSession?.Id ?? string.Empty, message);
 
                     //Update the chat session name if it is the default new chat name
-                    if (currentSession != null && currentSession.Name == Models.Constants.NEW_CHAT)
+                    if (currentSession is not null && currentSession.Name == Models.Constants.NEW_CHAT)
                     {
                         currentSession.Name = await aiService.SummarizeChatSessionNameAsync(currentSession?.SessionId);
-                        NavMenu.UpdateNavMenuDisplay("summarized text", currentSession);
+                        NavMenu?.UpdateNavMenuDisplay("summarized text", currentSession);
                     }
 
                     // Scroll to the bottom of the chat window
@@ -453,7 +459,9 @@ else
     }
 
 
-    //If the user presses the enter key, send their message
+    /// <summary>
+    /// If the user presses the enter key, send their message.
+    /// </summary>
     private async Task HandleKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Enter")
@@ -462,34 +470,37 @@ else
         }
     }
 
-    //Handles the file selected event for the InputFile component
+    /// <summary>
+    /// Handles the file selected event for the InputFile component.
+    /// </summary>
     private async Task HandleFileSelected(InputFileChangeEventArgs e)
     {
         selectedFile = e.File;
 
-        if (!string.IsNullOrEmpty(selectedFile.Name) && selectedFile.Size > 0)
+        if (!string.IsNullOrEmpty(selectedFile?.Name) && selectedFile.Size > 0)
         {
             await UploadFile();
-
-            selectedFile= null;
+            selectedFile = null;
         }
         else
         {
             ShowAlert("The file you selected is empty or has no name.", AlertTypeEnum.warning);
         }
 
-        if (selectedFile!=null && selectedFile.Size>maxFileSizeBytes)
+        if (selectedFile?.Size > maxFileSizeBytes)
         {
             ShowAlert("The file you selected is too large. Please select a file that is less than 1GB.", AlertTypeEnum.warning);
         }
     }
 
-    // Uploads the file to the server and processes it. The file is never stored in the original format on the server.
+    /// <summary>
+    /// Uploads the file to the server and processes it. The file is never stored in the original format on the server.
+    /// </summary>
     private async Task UploadFile()
     {
         try
         {
-            if (selectedFile == null)
+            if (selectedFile is null)
             {
                 ShowAlert("You need to select a file to upload.", AlertTypeEnum.warning);
                 return;
@@ -519,7 +530,7 @@ else
             //Check to see how we need to process the files.
             if (settings.AzureOpenAIChatCompletion.SupportsImages && (fileName.EndsWith(".jpg") || fileName.EndsWith(".jpeg") || fileName.EndsWith(".png") || fileName.EndsWith(".gif")))
             {
-                ProcessImage(memoryStream, fileName);
+                await ProcessImageAsync(memoryStream, fileName);
             }
             else
             {
@@ -561,8 +572,10 @@ else
         }
     }
 
-    //Handles the processing of image files that have been uploaded by the user.
-    private async void ProcessImage(MemoryStream memoryStream, string filename)
+    /// <summary>
+    /// Handles the processing of image files that have been uploaded by the user.
+    /// </summary>
+    private async Task ProcessImageAsync(MemoryStream memoryStream, string filename)
     {
         try
         {
@@ -605,7 +618,9 @@ else
 
 
 
-    //Shows an alert at the top of the page
+    /// <summary>
+    /// Shows an alert at the top of the page.
+    /// </summary>
     private void ShowAlert(string message, AlertTypeEnum alertType= AlertTypeEnum.info)
     {
 
@@ -614,7 +629,9 @@ else
         StateHasChanged();
     }
 
-    //Closes the alert message
+    /// <summary>
+    /// Closes the alert message.
+    /// </summary>
     private void CloseAlert()
     {
         alertMessage = string.Empty;
@@ -622,14 +639,21 @@ else
         StateHasChanged();
     }
 
-    // Method to Convert Byte Image to Base64 Data
+    /// <summary>
+    /// Converts a byte array image to Base64 data.
+    /// </summary>
+    /// <param name="byteImage">The byte array of the image.</param>
+    /// <param name="mimeType">The MIME type of the image.</param>
+    /// <returns>The Base64 data string of the image.</returns>
     private string ConvertByteImageToBase64Data(byte[] byteImage, string mimeType)
     {
         return $"data:{mimeType};base64," + Convert.ToBase64String(byteImage);
     }
 
 
-    // Method to handle user access requests
+    /// <summary>
+    /// Handles user access requests.
+    /// </summary>
     private void RequestAccess()
     {
 
@@ -674,7 +698,10 @@ else
     }
 
 
-    // Event handler for the NavMenu component for when a chat session is changed.
+    /// <summary>
+    /// Event handler for the NavMenu component for when a chat session is changed.
+    /// </summary>
+    /// <param name="session">The session that was changed.</param>
     public async void LoadChatEventHandlerAsync(Session session)
     {
         loadingComplete = false;
@@ -683,7 +710,9 @@ else
         await ReloadChatMessagesAsync();
     }
 
-    // Reloads the chat messages for the current session
+    /// <summary>
+    /// Reloads the chat messages for the current session.
+    /// </summary>
     private async Task ReloadChatMessagesAsync()
     {
         messagesInChat ??= new List<Message>();
@@ -699,20 +728,22 @@ else
         {
             foreach (var msg in messagesInChat)
             {
-                if (msg.Prompt.StartsWith("data:image"))
+                switch (msg.Prompt)
                 {
-                    string mimeType = ExtractMimeType(msg.Prompt);
-                    byte[] imageData = Convert.FromBase64String(msg.Prompt.Substring(mimeType.Length + 13));
-                    using MemoryStream imageStream = new MemoryStream(imageData);
-                    aiService.AddImageToChat(imageStream, mimeType);
-                }
-                else if (msg.Prompt.StartsWith("data:doc"))
-                {
-                    // Do nothing since the document is already in the memory store
-                }
-                else
-                {
-                    aiService.history.AddUserMessage(msg.Prompt);
+                    case string prompt when prompt.StartsWith("data:image"):
+                    {
+                        string mimeType = ExtractMimeType(msg.Prompt);
+                        byte[] imageData = Convert.FromBase64String(msg.Prompt.Substring(mimeType.Length + 13));
+                        using MemoryStream imageStream = new MemoryStream(imageData);
+                        aiService.AddImageToChat(imageStream, mimeType);
+                        break;
+                    }
+                    case string prompt when prompt.StartsWith("data:doc"):
+                        // Do nothing since the document is already in the memory store
+                        break;
+                    default:
+                        aiService.history.AddUserMessage(msg.Prompt);
+                        break;
                 }
                 aiService.history.AddAssistantMessage(msg.Completion);
             }
@@ -723,7 +754,11 @@ else
     }
 
 
-    // Updates the session and message data in the chat history.
+    /// <summary>
+    /// Updates the session and message data in the chat history.
+    /// </summary>
+    /// <param name="sessionId">The session ID.</param>
+    /// <param name="chatMessage">The chat message to update.</param>
     private async Task UpdateSessionAndMessage(string sessionId, Message chatMessage)
     {
 
@@ -736,7 +771,11 @@ else
     }
 
 
-    // Extracts the MIME type from a data URL
+    /// <summary>
+    /// Extracts the MIME type from a data URL.
+    /// </summary>
+    /// <param name="dataUrl">The data URL.</param>
+    /// <returns>The MIME type.</returns>
     private string ExtractMimeType(string dataUrl)
     {
         if (string.IsNullOrEmpty(dataUrl))
@@ -755,12 +794,18 @@ else
         return dataUrl.Substring(startIndex, endIndex - startIndex);
     }
 
+    /// <summary>
+    /// Deletes uploaded documents for a given session.
+    /// </summary>
+    /// <param name="sessionIdToDelete">The session ID for which to delete uploaded documents.</param>
     public async Task DeleteUploadedDocs(string sessionIdToDelete)
     {
         await aiService.DeleteUploadedDocs(sessionIdToDelete);
     }
 
-    // Navigates to the user profile page
+    /// <summary>
+    /// Navigates to the user profile page.
+    /// </summary>
     private void GoToProfile()
     {
         if (currentUser.Role!=UserRoles.Guest)
