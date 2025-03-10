@@ -16,6 +16,7 @@ builder.Services.AddHttpClient("retryHttpClient").AddPolicyHandler(RetryHelper.G
 builder.Services.AddDbContext<AIChatDBContext>();
 builder.Services.AddScoped<UserService>();
 builder.Services.AddSingleton<ChatHistoryService>();
+builder.Services.AddScoped<AIService>();
 
 // Add services to the container.
 builder.Services.AddRazorComponents()

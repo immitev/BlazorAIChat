@@ -5,7 +5,6 @@ const purify = DOMPurify(window);
 
 customElements.define('assistant-message', class extends HTMLElement {
     static observedAttributes = ['markdown'];
-
     attributeChangedCallback(name, oldValue, newValue) {
         if (name === 'markdown') {
 
@@ -25,9 +24,6 @@ customElements.define('assistant-message', class extends HTMLElement {
 
             // Set the innerHTML
             this.innerHTML = escapedHtml;
-
         }
     }
 });
-
-

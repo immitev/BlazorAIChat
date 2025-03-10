@@ -1,21 +1,14 @@
 ﻿@page "/"
 @rendermode InteractiveServer
-@inject IConfiguration Configuration
 @inject IJSRuntime js
 @inject NavigationManager NavigationManager
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject ChatHistoryService chatHistoryService
 @inject AIChatDBContext dbContext
 @inject UserService userService
-@inject IHttpClientFactory httpClientFactory
 @inject IOptions<AppSettings> appSettings
+@inject AIService aiService
 
-@using Azure
-@using Azure.AI.DocumentIntelligence
-@using Azure.Search.Documents.Indexes
-@using Azure.Search.Documents.Indexes.Models
-@using Azure.Storage.Blobs
-@using Azure.Storage.Blobs.Models
 @using BlazorAIChat.Components.Shared
 @using Microsoft.AspNetCore.Components.Web
 @using Microsoft.Extensions.Options;
@@ -23,15 +16,6 @@
 @using BlazorAIChat.Utils
 @using BlazorAIChat.Services
 @using Microsoft.AspNetCore.Components.Authorization
-@using Microsoft.KernelMemory.AI
-@using Microsoft.KernelMemory.AI.OpenAI
-@using Microsoft.SemanticKernel
-@using Microsoft.SemanticKernel.ChatCompletion
-@using Microsoft.SemanticKernel.Connectors.OpenAI
-@using Microsoft.SemanticKernel.Connectors.Sqlite
-@using Microsoft.SemanticKernel.Embeddings
-@using Microsoft.SemanticKernel.Memory
-@using Microsoft.KernelMemory
 @using System.Text
 @using System.Text.RegularExpressions
 @using System.Text.Json
@@ -87,52 +71,80 @@ else
     {
         <div class="h-100 d-flex flex-row justify-content-start">
             <div class="sidebar">
-                    <NavMenu @ref="@NavMenu" OnChatClicked="LoadChatEventHandlerAsync" User="@currentUser" OnDeleteUploadedDocs="DeleteUploadedDocs" />
+                <NavMenu @ref="@NavMenu" OnChatClicked="LoadChatEventHandlerAsync" User="@currentUser" OnDeleteUploadedDocs="DeleteUploadedDocs" />
             </div>
 
             <div class="flex-grow-1">
                 <div class="h-100 mh-100 d-flex flex-column overflow-hidden justify-content-start">
-                            <div class="w-100 navbar navbar-dark bg-primary d-flex flex-row px-4 justify-content-between flex-nowrap">
-                            <div class="d-flex flex-row justify-content-start">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" height="30" fill="currentColor" class="text-light">
-                                    <path d="M415.98 265.82v-.27a17.24 17.24 0 1 0 .01.27ZM224.4 321.87a17.24 17.24 0 1 0 34.48 0 17.24 17.24 0 0 0-34.48 0Z" />
-                                    <path d="M397.92 209.51C395.91 95.77 266.41 51.59 182.48 96.66l-.12 145.45a5.39 5.39 0 0 0 5.39 5.39h41.76a18.85 18.85 0 0 1 18.86 18.86v25.6a29.36 29.36 0 1 1-36.1 28.56 29.1 29.1 0 0 1 22.9-28.56v-26.94a5.65 5.65 0 0 0-5.66-5.66h-41.76a18.59 18.59 0 0 1-18.59-18.59v-135.9c-21.08 14.76-38.2 36.03-47.96 64.23-163.09 22.89-139.5 256.6 22.91 252.74h14.81V305.98a5.39 5.39 0 0 0-5.39-5.39h-23.71a29.36 29.36 0 1 1 0-13.2h23.71a18.59 18.59 0 0 1 18.59 18.59v115.86h148.46V210.59a5.39 5.39 0 0 0-5.39-5.39h-28.83a29.36 29.36 0 1 1-28.56-36.1 29.1 29.1 0 0 1 28.56 22.9h27.75a18.59 18.59 0 0 1 18.59 18.59v94.84h53.89a5.66 5.66 0 0 0 5.66-5.66v-5.39a29.38 29.38 0 0 1 6.73-57.94l1.1-.02a29.37 29.37 0 0 1 29.35 29.39 29.36 29.36 0 0 1-22.9 28.56v5.39a18.85 18.85 0 0 1-18.86 18.86h-53.89v103.2h43.38c61.49 2.64 114.03-46.08 115.32-107.78-1.2-53.49-41.47-98-94.58-104.54Z" />
-                                    <circle cx="101" cy="293.85" r="17.24" />
-                                    <circle cx="257.81" cy="198.46" r="17.24" />
-                                    <path d="m182.49 96.66-.07.05.07-.04Z" />
-                                </svg>
-                                <span class="navbar-brand mb-0 ms-1 h1">Blazor Azure OpenAI Chat</span>
-                                @if (appSettings.Value.UsesAzureAISearch)
-                                {
-                                    <h6><span class="badge bg-success ms-2">Azure AI Search</span></h6>
-                                }
-                                else if (appSettings.Value.UsesPostgreSQL)
-                                {
-                                    <h6><span class="badge bg-success ms-2">PostgreSQL Memory Storage</span></h6>
-                                }
-                                else
-                                {
-                                    <h6><span class="badge bg-success ms-2">File Memory Storage</span></h6>
-                                }
+                    <div class="w-100 navbar navbar-dark bg-primary d-flex flex-row px-4 justify-content-between flex-nowrap">
+                        <div class="d-flex flex-row justify-content-start">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" height="30" fill="currentColor" class="text-light">
+                                <path d="M415.98 265.82v-.27a17.24 17.24 0 1 0 .01.27ZM224.4 321.87a17.24 17.24 0 1 0 34.48 0 17.24 17.24 0 0 0-34.48 0Z" />
+                                <path d="M397.92 209.51C395.91 95.77 266.41 51.59 182.48 96.66l-.12 145.45a5.39 5.39 0 0 0 5.39 5.39h41.76a18.85 18.85 0 0 1 18.86 18.86v25.6a29.36 29.36 0 1 1-36.1 28.56 29.1 29.1 0 0 1 22.9-28.56v-26.94a5.65 5.65 0 0 0-5.66-5.66h-41.76a18.59 18.59 0 0 1-18.59-18.59v-135.9c-21.08 14.76-38.2 36.03-47.96 64.23-163.09 22.89-139.5 256.6 22.91 252.74h14.81V305.98a5.39 5.39 0 0 0-5.39-5.39h-23.71a29.36 29.36 0 1 1 0-13.2h23.71a18.59 18.59 0 0 1 18.59 18.59v115.86h148.46V210.59a5.39 5.39 0 0 0-5.39-5.39h-28.83a29.36 29.36 0 1 1-28.56-36.1 29.1 29.1 0 0 1 28.56 22.9h27.75a18.59 18.59 0 0 1 18.59 18.59v94.84h53.89a5.66 5.66 0 0 0 5.66-5.66v-5.39a29.38 29.38 0 0 1 6.73-57.94l1.1-.02a29.37 29.37 0 0 1 29.35 29.39 29.36 29.36 0 0 1-22.9 28.56v5.39a18.85 18.85 0 0 1-18.86 18.86h-53.89v103.2h43.38c61.49 2.64 114.03-46.08 115.32-107.78-1.2-53.49-41.47-98-94.58-104.54Z" />
+                                <circle cx="101" cy="293.85" r="17.24" />
+                                <circle cx="257.81" cy="198.46" r="17.24" />
+                                <path d="m182.49 96.66-.07.05.07-.04Z" />
+                            </svg>
+                            <span class="navbar-brand mb-0 ms-1 h1">Blazor Azure OpenAI Chat</span>
+                            @if (appSettings.Value.UsesAzureAISearch)
+                            {
+                                <h6><span class="badge bg-success ms-2">Azure AI Search</span></h6>
+                            }
+                            else if (appSettings.Value.UsesPostgreSQL)
+                            {
+                                <h6><span class="badge bg-success ms-2">PostgreSQL Memory Storage</span></h6>
+                            }
+                            else
+                            {
+                                <h6><span class="badge bg-success ms-2">File Memory Storage</span></h6>
+                            }
 
-                                @if (appSettings.Value.UsesAzureDocIntelligence)
-                                {
-                                    <h6><span class="badge bg-success ms-2">Azure Doc Intelligence</span></h6>
-                                }
-                                @if (appSettings.Value.UsesCosmosDb)
-                                {
-                                    <h6><span class="badge bg-success ms-2">Cosmos DB Chat History</span></h6>
-                                }
-                                else
-                                {
-                                    <h6><span class="badge bg-success ms-2">SQLite Chat History</span></h6>
-                                }
+                            @if (appSettings.Value.UsesAzureDocIntelligence)
+                            {
+                                <h6><span class="badge bg-success ms-2">Azure Doc Intelligence</span></h6>
+                            }
+                            @if (appSettings.Value.UsesCosmosDb)
+                            {
+                                <h6><span class="badge bg-success ms-2">Cosmos DB Chat History</span></h6>
+                            }
+                            else
+                            {
+                                <h6><span class="badge bg-success ms-2">SQLite Chat History</span></h6>
+                            }
 
-                            </div>
                         </div>
+                    </div>
 
-                        <div class="px-4 pb-4 pt-2 flex-grow-1 overflow-y-auto overflow-x-hidden align-items-stretch" id="MessagesInChatdiv">
-                            @if (currentSession is null)
+                    <div class="px-4 pb-4 pt-2 flex-grow-1 overflow-y-auto overflow-x-hidden align-items-stretch" id="MessagesInChatdiv">
+                        @if (currentSession is null)
+                        {
+                            <div class="alert alert-primary">
+                                <div class="alert-heading">
+                                    <div class="spinner-border text-primary me-1" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    Loading...
+                                </div>
+                                <p class="text-nowrap mb-0 fst-italic">
+                                    Please wait while your chat loads.
+                                </p>
+                            </div>
+                        }
+                        else if (currentSession.SessionId == Models.Constants.EMPTY_SESSION)
+                        {
+                            <div class="alert alert-warning">
+                                <h4 class="alert-heading">
+                                    <i class="bi bi-exclamation-triangle-fill me-1" aria-hidden="true"></i>
+                                    No Chats Available
+                                </h4>
+                                <p class="text-nowrap mb-0 fst-italic">
+                                    Use the Create New Chat option to start a new chat.
+                                </p>
+                            </div>
+                        }
+                        else
+                        {
+                            if (messagesInChat is null || loadingComplete == false)
                             {
                                 <div class="alert alert-primary">
                                     <div class="alert-heading">
@@ -146,53 +158,25 @@ else
                                     </p>
                                 </div>
                             }
-                            else if (currentSession.SessionId == Models.Constants.EMPTY_SESSION)
-                            {
-                                <div class="alert alert-warning">
-                                    <h4 class="alert-heading">
-                                        <i class="bi bi-exclamation-triangle-fill me-1" aria-hidden="true"></i>
-                                        No Chats Available
-                                    </h4>
-                                    <p class="text-nowrap mb-0 fst-italic">
-                                        Use the Create New Chat option to start a new chat.
-                                    </p>
-                                </div>
-                            }
                             else
                             {
-                                if (messagesInChat is null || loadingComplete == false)
+                                if (messagesInChat.Count == 0)
                                 {
-                                    <div class="alert alert-primary">
-                                        <div class="alert-heading">
-                                            <div class="spinner-border text-primary me-1" role="status">
-                                                <span class="visually-hidden">Loading...</span>
-                                            </div>
-                                            Loading...
-                                        </div>
-                                        <p class="text-nowrap mb-0 fst-italic">
-                                            Please wait while your chat loads.
+                                    <div class="alert alert-info">
+                                        <h4 class="alert-heading">
+                                            <i class="bi bi-lightbulb-fill me-1" aria-hidden="true"></i>
+                                            Get Started
+                                        </h4>
+                                        <p class="mb-0 fst-italic">
+                                            Start chatting with your AI assistant. You can upload images or documents, or provide URLs to ask questions about their content. Supported formats include Word, Excel, PowerPoint, Text, and PDF. Note that encrypted files and those with digital rights management are not supported.
                                         </p>
                                     </div>
                                 }
                                 else
                                 {
-                                    if (messagesInChat.Count == 0)
-                                    {
-                                        <div class="alert alert-info">
-                                            <h4 class="alert-heading">
-                                                <i class="bi bi-lightbulb-fill me-1" aria-hidden="true"></i>
-                                                Get Started
-                                            </h4>
-                                            <p class="mb-0 fst-italic">
-                                                Start chatting with your AI assistant. You can upload images or documents, or provide URLs to ask questions about their content. Supported formats include Word, Excel, PowerPoint, Text, and PDF. Note that encrypted files and those with digital rights management are not supported.
-                                            </p>
-                                        </div>
-                                    }
-                                    else
-                                    {
-                                        <div class="toast-container position-static w-100 d-flex flex-column align-items-stretch">
-                                            @foreach (var msg in messagesInChat)
-                                            {
+                                    <div class="toast-container position-static w-100 d-flex flex-column align-items-stretch">
+                                        @foreach (var msg in messagesInChat)
+                                        {
                                             <div class="toast fade show w-75 rounded-3 align-self-start">
                                                 <div class="toast-header bg-primary text-light">
                                                     <i class="bi bi-person me-1" aria-hidden="true"></i>
@@ -211,74 +195,74 @@ else
                                                     else
                                                         @(new MarkupString(msg.Prompt))
                                                 </div>
+                                            </div>
+                                            <div class="toast fade show w-75 rounded-3 align-self-end">
+                                                <div class="toast-header bg-success text-dark">
+                                                    <i class="bi bi-robot me-1" aria-hidden="true"></i>
+                                                    <strong class="me-auto text-capitalize">Assistant</strong>
                                                 </div>
-                                                <div class="toast fade show w-75 rounded-3 align-self-end">
-                                                    <div class="toast-header bg-success text-dark">
-                                                        <i class="bi bi-robot me-1" aria-hidden="true"></i>
-                                                        <strong class="me-auto text-capitalize">Assistant</strong>
-                                                    </div>
-                                                    <div class="toast-body">
-                                               
-                                                        @if(string.IsNullOrEmpty(msg.Completion.Trim()))
-                                                        {
-                                                            <div class="chat-bubble">
-                                                                <div class="typing">
-                                                                    <div class="dot"></div>
-                                                                    <div class="dot"></div>
-                                                                    <div class="dot"></div>
-                                                                </div>
-                                                            </div>
-                                                        }
-                                                        else
-                                                        {
-                                                            <span style="display: inline">
-                                                                <assistant-message markdown="@msg.Completion"></assistant-message>
-                                                            </span>
+                                                <div class="toast-body">
 
-                                                            @if (msg.Citations.Count>0)
+                                                    @if(string.IsNullOrEmpty(msg.Completion.Trim()))
+                                                    {
+                                                        <div class="chat-bubble">
+                                                            <div class="typing">
+                                                                <div class="dot"></div>
+                                                                <div class="dot"></div>
+                                                                <div class="dot"></div>
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span style="display: inline">
+                                                            <assistant-message markdown="@msg.Completion"></assistant-message>
+                                                        </span>
+
+                                                        @if (msg.Citations.Count>0)
+                                                        {
+                                                            <br/>
+
+                                                            @if (msg.Citations.Count>1)
                                                             {
-                                                                <br/>
-                                                       
-                                                                @if (msg.Citations.Count>1)
-                                                                {
-                                                                    <div class="badge bg-primary">Sources:</div>
-                                                                }
-                                                                else
-                                                                {
-                                                                    <div class="badge bg-primary">Source:</div>
-                                                                }
-                                                                     
-                                                                <ul>
+                                                                <div class="badge bg-primary">Sources:</div>
+                                                            }
+                                                            else
+                                                            {
+                                                                <div class="badge bg-primary">Source:</div>
+                                                            }
+
+                                                            <ul>
                                                                 @foreach (var citation in msg.Citations)
                                                                 {
                                                                     <li>@(new MarkupString(citation))</li>
                                                                 }
-                                                                </ul>                                                             
-                                                            }
+                                                            </ul>                                                             
                                                         }
-                                                    </div>
+                                                    }
                                                 </div>
-                                            }
-                                        </div>
-                                    }
+                                            </div>
+                                        }
+                                    </div>
                                 }
                             }
-                        </div>
-                        <div class="bg-primary text-light px-4 py-2 rounded-top-5 text-dark d-flex flex-column justify-content-center">
-                            @if (currentSession is not null && currentSession?.SessionId != Models.Constants.EMPTY_SESSION)
-                            {
-                                <div class="input-group">
-                                    <input type="text" class="form-control" placeholder="Enter your message" disabled="@isResponding" @bind-value="userMessage" @bind-value:event="oninput" @onkeydown="HandleKeyDown" />
-                                    <button class="btn btn-primary" @onclick="SendMessage">Send</button>
-                                    <InputFile @ref="inputFile" class="btn btn-warning" OnChange="HandleFileSelected" disabled="@(isFileInputDisabled||isResponding)" />
-                                    <button class="btn btn-secondary" @onclick="Stop">Stop</button>
-                                </div>                    
-                            }
-                        </div>
+                        }
+                    </div>
+                    <div class="bg-primary text-light px-4 py-2 rounded-top-5 text-dark d-flex flex-column justify-content-center">
+                        @if (currentSession is not null && currentSession?.SessionId != Models.Constants.EMPTY_SESSION)
+                        {
+                            <div class="input-group">
+                                <input type="text" class="form-control" placeholder="Enter your message" disabled="@isResponding" @bind-value="userMessage" @bind-value:event="oninput" @onkeydown="HandleKeyDown" />
+                                <button class="btn btn-primary" @onclick="SendMessage">Send</button>
+                                <InputFile @ref="inputFile" class="btn btn-warning" OnChange="HandleFileSelected" disabled="@(isFileInputDisabled||isResponding)" />
+                                <button class="btn btn-secondary" @onclick="Stop">Stop</button>
+                            </div>                    
+                        }
                     </div>
                 </div>
+            </div>
         </div>
-   
+
         <CustomModal IsVisible="isFileInputDisabled" Title="Document Processing" Message="Please wait, the document is uploading and processing. The amount of time this takes depends upon the size of the document." />
 
     }
@@ -286,13 +270,9 @@ else
 
 @code {
 
-    //HTTP Client with retry policy
-    private HttpClient? httpClient;
-
     //NavMenu component
     private NavMenu? NavMenu = default;
 
-#pragma warning disable SKEXP0010, SKEXP0001, SKEXP0020, KMEXP00
     //Config data from database
     private Config config = new Config(){ Id=Guid.Empty};
 
@@ -301,14 +281,6 @@ else
     private List<Message>? messagesInChat;
     private Session? currentSession;
     private string sessionIdToDelete = string.Empty;
-
-    //Kernel and memory store
-    private IKernelBuilder? builder = null;
-    private Kernel? kernel = null;
-    private MemoryServerless? kernelMemory = null;
-    private IChatCompletionService? chatCompletionService = null;
-    private ChatHistory history = new ChatHistory();
-    private ITextTokenizer? textTokenizer;
 
     //Flags for UI
     bool showNeedsConfigure = false;
@@ -336,18 +308,9 @@ else
     //Application settings from appsettings.json or AppSerivce configuration
     AppSettings settings = new AppSettings();
 
-    private readonly string _summarizePrompt = @"
-        Summarize this text. One to three words maximum length.
-        Plain text only. No punctuation, markup or tags.";
-
     // Initialization of the page
     protected override async Task OnInitializedAsync()
     {
-        //Setup the HttpClinet
-        httpClient = httpClientFactory.CreateClient("retryHttpClient");
-
-        //Setup the Tokenizer to use
-        textTokenizer = new GPT4Tokenizer();
 
         //Get instance of NavMenu
         NavMenu = new NavMenu();
@@ -381,89 +344,6 @@ else
             if (dbConfig != null)
                 config = dbConfig;       
 
-            // Create a kernel builder with Azure OpenAI chat completion. Both chat completion and embedding use the same OpenAI endpoint and key.
-            builder = Kernel.CreateBuilder()
-            .AddAzureOpenAIChatCompletion(settings.AzureOpenAIChatCompletion.Model, settings.AzureOpenAIChatCompletion.Endpoint, settings.AzureOpenAIChatCompletion.ApiKey,httpClient: httpClient)
-            .AddAzureOpenAITextEmbeddingGeneration(settings.AzureOpenAIEmbedding.Model, settings.AzureOpenAIChatCompletion.Endpoint, settings.AzureOpenAIChatCompletion.ApiKey, httpClient: httpClient);
-
-            // Add enterprise components
-            builder.Services.AddLogging(services => services.AddConsole().SetMinimumLevel(LogLevel.Trace));
-
-            // Build the kernel
-            kernel = builder.Build();
-
-            //Set file directory for storing knowledge if PostgreSQL or Azure AI Search is not used
-            var knnDirectory = "KNN";
-
-            //Setup the memory store
-            var kernelMemoryBuilder = new KernelMemoryBuilder()
-            .WithAzureOpenAITextEmbeddingGeneration(new AzureOpenAIConfig
-                {
-                    APIType = AzureOpenAIConfig.APITypes.EmbeddingGeneration,
-                    Endpoint = settings.AzureOpenAIChatCompletion.Endpoint,
-                    Deployment = settings.AzureOpenAIEmbedding.Model,
-                    Auth = AzureOpenAIConfig.AuthTypes.APIKey,
-                    APIKey = settings.AzureOpenAIChatCompletion.ApiKey,
-                    MaxTokenTotal = settings.AzureOpenAIEmbedding.MaxInputTokens,
-                    MaxRetries = 3
-                },
-                httpClient: httpClient)
-            .WithAzureOpenAITextGeneration(new AzureOpenAIConfig
-                {
-                    APIType = AzureOpenAIConfig.APITypes.ChatCompletion,
-                    Endpoint = settings.AzureOpenAIChatCompletion.Endpoint,
-                    Deployment = settings.AzureOpenAIChatCompletion.Model,
-                    Auth = AzureOpenAIConfig.AuthTypes.APIKey,
-                    APIKey = settings.AzureOpenAIChatCompletion.ApiKey,
-                    MaxTokenTotal = settings.AzureOpenAIChatCompletion.MaxInputTokens,
-                    MaxRetries = 3
-                }, httpClient: httpClient, textTokenizer: textTokenizer);
-
-
-            //If Azure AI Search is configured, we use that for storage
-            if (settings.UsesAzureAISearch)
-            {
-                kernelMemoryBuilder = kernelMemoryBuilder.WithAzureAISearchMemoryDb(new AzureAISearchConfig()
-                {
-                    Endpoint = settings.AzureAISearch.Endpoint,
-                    APIKey = settings.AzureAISearch.ApiKey,
-                    Auth = AzureAISearchConfig.AuthTypes.APIKey,
-                    UseHybridSearch = false
-                });
-
-            }
-            else if (settings.UsesPostgreSQL)
-            {
-                //Use PostgreSQL DB memory store
-                //NOTE: You must have enabled pgvector extension in your PostgreSQL database for this to work.
-                kernelMemoryBuilder = kernelMemoryBuilder.WithPostgresMemoryDb(new PostgresConfig()
-                    {
-                        ConnectionString = settings.ConnectionStrings.PostgreSQL
-                    });
-            }
-            else
-            {
-                //Use file memory store
-                kernelMemoryBuilder = kernelMemoryBuilder.WithSimpleVectorDb(new Microsoft.KernelMemory.MemoryStorage.DevTools.SimpleVectorDbConfig { StorageType = Microsoft.KernelMemory.FileSystem.DevTools.FileSystemTypes.Disk, Directory = knnDirectory });
-            }
-
-            //Configure document intelligence if configured
-            if (!settings.AzureOpenAIChatCompletion.SupportsImages && settings.UsesAzureDocIntelligence)
-            {
-                kernelMemoryBuilder = kernelMemoryBuilder.WithAzureAIDocIntel(new AzureAIDocIntelConfig()
-                    {
-                        Endpoint = settings.DocumentIntelligence.Endpoint,
-                        APIKey = settings.DocumentIntelligence.ApiKey,
-                        Auth= AzureAIDocIntelConfig.AuthTypes.APIKey
-                    });
-            }
-
-            //Build the memory store
-            kernelMemory = kernelMemoryBuilder.Build<MemoryServerless>();
-
-            //Get reference to the chat completion service
-            chatCompletionService = kernel.GetRequiredService<IChatCompletionService>();
-
             //Clear the chat history and set the system message
             messagesInChat = new List<Message>();
 
@@ -494,7 +374,7 @@ else
     {
         try
         {
-            if (!string.IsNullOrWhiteSpace(userMessage) && chatCompletionService != null && currentSession!=null)
+            if (!string.IsNullOrWhiteSpace(userMessage) && currentSession!=null)
             {
 
                 //The user previously requested to stop responding, so reset the flag so it can respond to the new message
@@ -516,57 +396,53 @@ else
                 await Task.Delay(100);
                 await js.InvokeVoidAsync("scrollToBottom", "MessagesInChatdiv");
 
-                //Pull out any URLs from the message
-                var urls = StringUtils.GetURLsFromString(messageToProcess);
-
-                //If we have URLs, we need to add them to kernel memory
-                SearchResult? searchData = null;
-                if (urls.Count>0)
+                try
                 {
-                    await ProcessURLsWithKernelMemory(urls);
+                    var markdownBuilder = new StringBuilder();
 
-                    //Remove urls from messageToProcess string.
-                    string messageToProcessNoURLS = await GenerateNewPromptForMessagesWithUrl(messageToProcess);
-                    searchData = await kernelMemory!.SearchAsync(messageToProcessNoURLS, currentSession.Id);
-                }
-                else
-                {
-                    searchData = await kernelMemory!.SearchAsync(messageToProcess, currentSession.Id);
-                }
-
-                if (searchData!=null && !searchData.NoResult)
-                {
-                    if (searchData.Results.Count>0)
+                    await foreach (var chatUpdate in await aiService.GetChatResponseAsync(messageToProcess, message, currentSession, currentUser))
                     {
-                        history.AddUserMessage("No matter what the question or request, base the response only on the information below.");
-                        foreach (var result in searchData.Results)
+                        //If the user has requested to stop responding, then break out of the loop
+                        if (stopResponding)
                         {
-                            foreach (var p in result.Partitions)
-                            {
-                                history.AddUserMessage(p.Text);
-                            }
-
-                            //Add the source to the message
-                            if (result.SourceName.ToLower() != "content.url")
-                                message.Citations.Add($"{result.SourceName} ({(result.Partitions.Max(x => x.Relevance) * 100).ToString("F2")}%)");
-                            else
-                                message.Citations.Add($"<a href='{result.SourceUrl}' target='_blank'>{result.SourceUrl}</a> ({(result.Partitions.Max(x => x.Relevance) * 100).ToString("F2")}%)");
-
+                            break;
                         }
-                        history.AddUserMessage("----------------------------------");
+
+                        //If the chat update has content, then append it to the results
+                        if (chatUpdate?.Content != null)
+                        {
+                            markdownBuilder.Append(chatUpdate.Content);
+                            message.Completion = markdownBuilder.ToString();
+
+                            // Scroll to the bottom of the chat window
+                            await js.InvokeVoidAsync("scrollToBottom", "MessagesInChatdiv");
+                            StateHasChanged();
+                        }
                     }
+                    message.Completion = markdownBuilder.ToString();
+                    aiService.history.AddAssistantMessage(markdownBuilder.ToString());
+
+                    //store the chat session history
+                    await UpdateSessionAndMessage(currentSession?.Id ?? string.Empty, message);
+
+                    //Update the chat session name if it is the default new chat name
+                    if (currentSession != null && currentSession.Name == Models.Constants.NEW_CHAT)
+                    {
+                        currentSession.Name = await aiService.SummarizeChatSessionNameAsync(currentSession?.SessionId);
+                        NavMenu.UpdateNavMenuDisplay("summarized text", currentSession);
+                    }
+
+                    // Scroll to the bottom of the chat window
+                    await js.InvokeVoidAsync("scrollToBottom", "MessagesInChatdiv");
+                    isResponding = false;
+                    StateHasChanged();
                 }
-
-                //Add the user message to the chat history
-                history.AddUserMessage(messageToProcess);
-                StateHasChanged();
-
-                //Clean up history and remove old non-system messages in order to stay below our MaxInputTokens limit.
-                //This is not the most efficient way to do this, but it is simple and works for this demo.
-                history = AIUtils.CleanUpHistory(history, textTokenizer, settings.AzureOpenAIChatCompletion.MaxInputTokens);
-
-                //Start the AI text generation process
-                await StreamChatCompletionAsync(history,message, chatCompletionService);
+                catch (Exception ex)
+                {
+                    isResponding = false;
+                    StateHasChanged();
+                    Console.WriteLine($"StreamChatCompletionAsync error: {ex.Message}");
+                }
             }
         }
         catch (Exception ex)
@@ -576,57 +452,6 @@ else
         }
     }
 
-    //Generates text from the AI and streams it to the chat window
-    public async Task StreamChatCompletionAsync(ChatHistory history, Message message, IChatCompletionService chatCompletionService)
-    {
-        try
-        {
-            var markdownBuilder = new StringBuilder();
-
-            await foreach (var chatUpdate in chatCompletionService.GetStreamingChatMessageContentsAsync(history))
-            {
-                //If the user has requested to stop responding, then break out of the loop
-                if (stopResponding)
-                {
-                    break;
-                }
-
-                //If the chat update has content, then append it to the results
-                if (chatUpdate?.Content != null)
-                {
-                    markdownBuilder.Append(chatUpdate.Content);
-                    message.Completion = markdownBuilder.ToString();
-
-                    // Scroll to the bottom of the chat window
-                    await js.InvokeVoidAsync("scrollToBottom", "MessagesInChatdiv");
-                    StateHasChanged();
-                }
-            }
-            message.Completion = markdownBuilder.ToString();
-            history.AddAssistantMessage(markdownBuilder.ToString());
-
-            //store the chat session history
-            await UpdateSessionAndMessage(currentSession?.Id ?? string.Empty, message);
-
-            //Update the chat session name if it is the default new chat name
-            if (currentSession != null && currentSession.Name == Models.Constants.NEW_CHAT)
-            {
-                currentSession.Name = await SummarizeChatSessionNameAsync(currentSession?.SessionId);
-                NavMenu.UpdateNavMenuDisplay("summarized text", currentSession);
-            }
-
-            // Scroll to the bottom of the chat window
-            await js.InvokeVoidAsync("scrollToBottom", "MessagesInChatdiv");
-            isResponding = false;
-            StateHasChanged();
-        }
-        catch (Exception ex)
-        {
-            isResponding = false;
-            StateHasChanged();
-            Console.WriteLine($"StreamChatCompletionAsync error: {ex.Message}");
-        }
-    }
 
     //If the user presses the enter key, send their message
     private async Task HandleKeyDown(KeyboardEventArgs e)
@@ -698,7 +523,22 @@ else
             }
             else
             {
-                await ProcessDocsWithKernelMemory(memoryStream, fileName);
+                if (currentSession is null)
+                    return;
+
+                bool wasProcessed =  await aiService.ProcessDocsWithKernelMemory(memoryStream, fileName,currentSession, currentUser);
+                if (!wasProcessed)
+                    ShowAlert("The document you uploaded is already in the chat session.", AlertTypeEnum.warning);
+                else
+                {
+                    //Show the user that the document has been processed
+                    Message message = new Message(currentSession.Id, $"data:doc;{fileName}", "What would you like to know about that document?");
+                    if (messagesInChat != null && currentSession != null)
+                        messagesInChat.Add(message);
+                    //store the chat session history
+                    await UpdateSessionAndMessage(currentSession?.Id ?? string.Empty, message);
+                }
+
             }
 
             // Clear the file input so it no longer shows the uploaded filename
@@ -749,11 +589,7 @@ else
                 messagesInChat.Add(message);
 
             //Add the image to the chat history so the AI can process it
-            var sendMessage = new ChatMessageContentItemCollection
-            {
-                new ImageContent(){Data=uploadImageByteArray, MimeType = uploadImageType }
-            };
-            history.AddUserMessage(sendMessage);
+            aiService.AddImageToChat(memoryStream, uploadImageType);
 
             //store the chat session history
             await UpdateSessionAndMessage(currentSession?.Id ?? string.Empty, message);
@@ -770,46 +606,7 @@ else
         }
     }
 
-    //Processes the uploaded file with Kernel Memory and stores the embeddings in the configured storage system.
-    private async Task ProcessDocsWithKernelMemory(MemoryStream memoryStream, string filename)
-    {
-        if (kernelMemory != null)
-        {
-            //Let's see if the document already is in the session, If so give a notification and then return.
-            var doc = dbContext.SessionDocuments.FirstOrDefault(d => d.FileNameOrUrl == filename && d.SessionId == currentSession.SessionId);
-            if (doc != null)
-            {
-                ShowAlert("The document you uploaded is already in the chat session.", AlertTypeEnum.warning);
-                return;
-            }
 
-            //Prep variables for processing
-            var docId = Guid.NewGuid().ToString();
-            string index = currentSession.SessionId;
-            TagCollection tags = new TagCollection();
-            tags.Add("user", currentUser.Id);
-            memoryStream.Position = 0;
-
-            await kernelMemory.ImportDocumentAsync(memoryStream, filename, docId, tags, index);
-
-            //Add record to database about document
-            dbContext.SessionDocuments.Add(new SessionDocument() { DocId = docId, FileNameOrUrl = filename, SessionId = index });
-            dbContext.SaveChanges();
-
-            while(!await kernelMemory.IsDocumentReadyAsync(docId,index))
-            {
-                Thread.Sleep(1000);
-            }
-
-            //Show the user that the document has been processed
-            Message message = new Message(currentSession.Id, $"data:doc;{filename}", "What would you like to know about that document?");
-            if (messagesInChat != null && currentSession != null)
-                messagesInChat.Add(message);
-            //store the chat session history
-            await UpdateSessionAndMessage(currentSession?.Id ?? string.Empty, message);
-
-        }
-    }
 
     //Shows an alert at the top of the page
     private void ShowAlert(string message, AlertTypeEnum alertType= AlertTypeEnum.info)
@@ -898,8 +695,8 @@ else
         }
 
         //setup chat history object
-        history = new ChatHistory();
-        history.AddSystemMessage(settings.SystemMessage);
+        aiService.history.Clear();
+        aiService.history.AddSystemMessage(settings.SystemMessage);
         if (messagesInChat != null && messagesInChat.Count > 0)
         {
             foreach (var msg in messagesInChat)
@@ -907,7 +704,10 @@ else
                 if (msg.Prompt.StartsWith("data:image"))
                 {
                     string mimeType = ExtractMimeType(msg.Prompt);
-                    history.AddUserMessage(new ChatMessageContentItemCollection() { new ImageContent() { Data = Convert.FromBase64String(msg.Prompt.Substring(mimeType.Length + 13)), MimeType=mimeType } });
+                    byte[] imageData = Convert.FromBase64String(msg.Prompt.Substring(mimeType.Length + 13));
+                    //create a new memory stream from the byte array
+                    using MemoryStream imageStream = new MemoryStream(imageData);
+                    aiService.AddImageToChat(imageStream, mimeType);
                 }
                 else if (msg.Prompt.StartsWith("data:doc"))
                 {
@@ -915,9 +715,9 @@ else
                 }
                 else
                 {
-                    history.AddUserMessage(msg.Prompt);
+                    aiService.history.AddUserMessage(msg.Prompt);
                 }
-                history.AddAssistantMessage(msg.Completion);             
+                aiService.history.AddAssistantMessage(msg.Completion);
             }
         }
 
@@ -937,74 +737,6 @@ else
         //Insert new message and Update session in a transaction
         await chatHistoryService.UpsertSessionBatchAsync(session, chatMessage);
 
-    }
-
-    public async Task<string> GenerateNewPromptForMessagesWithUrl(string theMessage)
-    {
-        string completionText = string.Empty;
-        var skChatHistory = new ChatHistory();
-        skChatHistory.AddSystemMessage("Rewrite the user prompt to remove all URLs but still make the question or request understandable.");
-        skChatHistory.AddUserMessage(theMessage);
-        PromptExecutionSettings settings = new()
-        {
-            ExtensionData = new Dictionary<string, object>()
-            {
-                { "Temperature", 0.8 }
-            }
-        };
-
-        var result = await kernel.GetRequiredService<IChatCompletionService>().GetChatMessageContentAsync(skChatHistory, settings);
-        completionText = result.Items[0].ToString()!;
-        return completionText;
-    }
-
-    // Summarizes the chat session name based on the conversation. This is used to provide a more meaningful name to the chat session.
-    public async Task<string> SummarizeChatSessionNameAsync(string? sessionId)
-    {
-        ArgumentNullException.ThrowIfNull(sessionId);
-
-        //Get the messages for the session
-        List<Message> messages = await chatHistoryService.GetSessionMessagesAsync(sessionId);
-
-        //Create a conversation string from the messages
-        string conversationText = string.Join(" ", messages.Select(m => m.Prompt + " " + m.Completion));
-
-        //Send to Semantic Kernel to summarize the conversation
-        string completionText = "New Chat";
-        var skChatHistory = new ChatHistory();
-        skChatHistory.AddSystemMessage(_summarizePrompt);
-        skChatHistory.AddUserMessage(conversationText);
-
-        PromptExecutionSettings settings = new()
-        {
-                ExtensionData = new Dictionary<string, object>()
-            {
-                { "Temperature", 0.0 },
-                { "TopP", 1.0 },
-                { "MaxTokens", 100 }
-            }
-        };
-
-        var result = await kernel.GetRequiredService<IChatCompletionService>().GetChatMessageContentAsync(skChatHistory, settings);
-        completionText = result.Items[0].ToString()!;
-
-        Session session = await chatHistoryService.GetSessionAsync(sessionId);
-        session.Name = completionText;
-        await chatHistoryService.UpdateSessionAsync(session);
-        return completionText;
-    }
-
-    // Strips the outer paragraph tags from the html. This is used to ensure that the AI generated text is displayed correctly in the UI.
-    public static string StripOuterParagraphTags(string input)
-    {
-        if (string.IsNullOrEmpty(input))
-        {
-            return input;
-        }
-
-        // Use a regular expression to remove the outer <p> and </p> tags, case-insensitive
-        string pattern = @"^\s*<p>(.*?)<\/p>?\s*$";
-        return Regex.Replace(input, pattern, "$1", RegexOptions.IgnoreCase | RegexOptions.Singleline);
     }
 
 
@@ -1027,49 +759,9 @@ else
         return dataUrl.Substring(startIndex, endIndex - startIndex);
     }
 
-    private async Task ProcessURLsWithKernelMemory(List<string> urls)
+    public async Task DeleteUploadedDocs(string sessionIdToDelete)
     {
-        if (kernelMemory!=null)
-        {
-            string index = currentSession.SessionId;
-            TagCollection tags = new TagCollection();
-            tags.Add("user", currentUser.Id);
-            foreach (var url in urls)
-            {
-                //check if the url is already in the session
-                var doc = dbContext.SessionDocuments.FirstOrDefault(d => d.FileNameOrUrl == url && d.SessionId == index);
-                if (doc== null)
-                {
-                    var docId = Guid.NewGuid().ToString();
-                    await kernelMemory.ImportWebPageAsync(url, docId, tags, index);
-                    while (!await kernelMemory.IsDocumentReadyAsync(docId, index))
-                    {
-                        Thread.Sleep(500);
-                    }
-                    dbContext.SessionDocuments.Add(new SessionDocument() { DocId = docId, FileNameOrUrl = url, SessionId = index });
-                    dbContext.SaveChanges();
-                }
-            }
-        }
-    }
-
-    // Deletes the uploaded documents from the memory store
-    private async Task DeleteUploadedDocs(string sessionIdToDelete)
-    {
-        if (!string.IsNullOrEmpty(sessionIdToDelete))
-        {
-
-            if (kernelMemory != null)
-                await kernelMemory.DeleteIndexAsync(sessionIdToDelete);
-
-            //Delete the documents from the database
-            var docs = dbContext.SessionDocuments.Where(d => d.SessionId == sessionIdToDelete);
-            dbContext.SessionDocuments.RemoveRange(docs);
-            dbContext.SaveChanges();
-
-
-            sessionIdToDelete = string.Empty;
-        }
+        await aiService.DeleteUploadedDocs(sessionIdToDelete);
     }
 
     // Navigates to the user profile page
