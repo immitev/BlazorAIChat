@@ -184,13 +184,13 @@ else
                         @if (currentSession is not null && currentSession?.SessionId != Models.Constants.EMPTY_SESSION)
                         {
                             <ChatInput 
-                                @bind-UserMessage="userMessage" 
-                                IsResponding="isResponding" 
-                                OnSendMessage="SendMessage" 
-                                OnStop="Stop" 
-                                OnFileSelected="HandleFileSelected" 
-                                IsFileInputDisabled="isFileInputDisabled" 
-                                InputFileRef="inputFile" />
+                            UserMessage=@userMessage
+                            UserMessageChanged = "OnUserMessageChanged"
+                            IsResponding=@isResponding 
+                            OnStop="Stop" 
+                            OnFileSelected="HandleFileSelected" 
+                            IsFileInputDisabled=@isFileInputDisabled
+                            InputFileRef=@inputFile />
                         }
                     </div>
                 </div>
@@ -330,6 +330,12 @@ else
         }
     }
 
+    private async Task OnUserMessageChanged(string message)
+    {
+        userMessage = message;
+        await SendMessage();
+    }
+
 
     /// <summary>
     /// Handles the user's message and sends it to the AI for processing.
@@ -426,17 +432,6 @@ else
         await InvokeAsync(StateHasChanged);
     }
 
-
-    /// <summary>
-    /// If the user presses the enter key, send their message.
-    /// </summary>
-    private async Task HandleKeyDown(KeyboardEventArgs e)
-    {
-        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(userMessage))
-        {
-            await SendMessage();
-        }
-    }
 
     /// <summary>
     /// Handles the file selected event for the InputFile component.

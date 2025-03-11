@@ -3,12 +3,13 @@
 
 <div class="input-group">
     <input type="text" class="form-control" placeholder="Enter your message" disabled="@IsResponding" @bind-value="UserMessage" @bind-value:event="oninput" @onkeydown="HandleKeyDown" />
-    <button class="btn btn-primary" @onclick="OnSendMessage">Send</button>
+    <button class="btn btn-primary" @onclick="SendMessage">Send</button>
     <InputFile @ref="InputFileRef" class="btn btn-warning" OnChange="OnFileSelected" disabled="@(IsFileInputDisabled || IsResponding)" />
     <button class="btn btn-secondary" @onclick="OnStop">Stop</button>
 </div>
 
 @code {
+
     [Parameter]
     public string UserMessage { get; set; } = string.Empty;
 
@@ -16,13 +17,13 @@
     public bool IsResponding { get; set; }
 
     [Parameter]
-    public EventCallback OnSendMessage { get; set; }
-
-    [Parameter]
     public EventCallback OnStop { get; set; }
 
     [Parameter]
     public EventCallback<InputFileChangeEventArgs> OnFileSelected { get; set; }
+
+    [Parameter]
+    public EventCallback<string> UserMessageChanged { get; set; }
 
     [Parameter]
     public bool IsFileInputDisabled { get; set; }
@@ -32,9 +33,17 @@
 
     private async Task HandleKeyDown(KeyboardEventArgs e)
     {
-        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(UserMessage))
+        if (e.Key == "Enter")
         {
-            await OnSendMessage.InvokeAsync();
+            await SendMessage();
+        }
+    }
+
+    private async Task SendMessage()
+    {
+        if (!string.IsNullOrWhiteSpace(UserMessage))
+        {
+            await UserMessageChanged.InvokeAsync(UserMessage);
         }
     }
 }
