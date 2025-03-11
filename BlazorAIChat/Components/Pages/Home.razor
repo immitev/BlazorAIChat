@@ -175,76 +175,7 @@ else
                                 }
                                 else
                                 {
-                                    <div class="toast-container position-static w-100 d-flex flex-column align-items-stretch">
-                                        @foreach (var msg in messagesInChat)
-                                        {
-                                            <div class="toast fade show w-75 rounded-3 align-self-start">
-                                                <div class="toast-header bg-primary text-light">
-                                                    <i class="bi bi-person me-1" aria-hidden="true"></i>
-                                                    <strong class="me-auto text-capitalize">User</strong>
-                                                </div>
-                                                <div class="toast-body">
-                                                    @if (msg.Prompt.StartsWith("data:image"))
-                                                    {
-                                                        <img style='max-height:300px; max-width:300px;' src='@msg.Prompt' />
-                                                    }
-                                                    else if (msg.Prompt.StartsWith("data:doc"))
-                                                    {
-                                                        var fileName = msg.Prompt.Substring(9);
-                                                        <img style="width:25px" src="@FileUtils.GetIconForFileType(fileName)" /> @fileName
-                                                    }
-                                                    else
-                                                        @(new MarkupString(msg.Prompt))
-                                                </div>
-                                            </div>
-                                            <div class="toast fade show w-75 rounded-3 align-self-end">
-                                                <div class="toast-header bg-success text-dark">
-                                                    <i class="bi bi-robot me-1" aria-hidden="true"></i>
-                                                    <strong class="me-auto text-capitalize">Assistant</strong>
-                                                </div>
-                                                <div class="toast-body">
-
-                                                    @if(string.IsNullOrEmpty(msg.Completion.Trim()))
-                                                    {
-                                                        <div class="chat-bubble">
-                                                            <div class="typing">
-                                                                <div class="dot"></div>
-                                                                <div class="dot"></div>
-                                                                <div class="dot"></div>
-                                                            </div>
-                                                        </div>
-                                                    }
-                                                    else
-                                                    {
-                                                        <span style="display: inline">
-                                                            <assistant-message markdown="@msg.Completion"></assistant-message>
-                                                        </span>
-
-                                                        @if (msg.Citations.Count>0)
-                                                        {
-                                                            <br/>
-
-                                                            @if (msg.Citations.Count>1)
-                                                            {
-                                                                <div class="badge bg-primary">Sources:</div>
-                                                            }
-                                                            else
-                                                            {
-                                                                <div class="badge bg-primary">Source:</div>
-                                                            }
-
-                                                            <ul>
-                                                                @foreach (var citation in msg.Citations)
-                                                                {
-                                                                    <li>@(new MarkupString(citation))</li>
-                                                                }
-                                                            </ul>                                                             
-                                                        }
-                                                    }
-                                                </div>
-                                            </div>
-                                        }
-                                    </div>
+                                    <ChatMessages Messages="messagesInChat" />
                                 }
                             }
                         }
