@@ -241,6 +241,8 @@ else
     //Application settings from appsettings.json or AppSerivce configuration
     AppSettings settings = new AppSettings();
 
+    bool isPageFullyLoaded = false;
+
     /// <summary>
     /// Initializes the page and loads necessary data.
     /// </summary>
@@ -251,10 +253,16 @@ else
         NavMenu = new NavMenu();
 
         await FetchCurrentUserAsync();
-        await FetchAppSettingsAsync();
+        FetchAppSettings();
         await InitializeChatAsync();
 
         await InvokeAsync(StateHasChanged);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        isPageFullyLoaded = true;
+        await js.InvokeVoidAsync("scrollToBottom", "MessagesInChatdiv");
     }
 
     private async Task FetchCurrentUserAsync()
@@ -275,7 +283,7 @@ else
         }
     }
 
-    private async Task FetchAppSettingsAsync()
+    private void FetchAppSettings()
     {
         try
         {
@@ -728,7 +736,15 @@ else
             }
 
             loadingComplete = true;
+
             await InvokeAsync(StateHasChanged);
+
+            // Call this only if the page is fully loaded
+            if (isPageFullyLoaded)
+            {
+                await js.InvokeVoidAsync("scrollToBottom", "MessagesInChatdiv");
+            }
+
         }
         catch (Exception ex)
         {
