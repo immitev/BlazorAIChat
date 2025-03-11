@@ -222,8 +222,10 @@ namespace BlazorAIChat.Services
             {
                 // Process URLs with kernel memory
                 await ProcessURLsWithKernelMemory(urls, currentSession, currentUser).ConfigureAwait(false);
+
                 // Generate a new prompt without URLs
                 string messageToProcessNoURLS = await GenerateNewPromptForMessagesWithUrl(prompt).ConfigureAwait(false);
+
                 // Search the kernel memory with the new prompt
                 searchData = await kernelMemory!.SearchAsync(messageToProcessNoURLS, currentSession.Id).ConfigureAwait(false);
             }
