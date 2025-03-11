@@ -29,6 +29,7 @@ namespace BlazorAIChat.Services
         public ChatHistory history { get; private set; } = new ChatHistory();
         private readonly AIChatDBContext dbContext;
         private readonly ChatCompletionAgent sessionSummaryAgent;
+        private readonly ChatCompletionAgent promptRewriteAgent;
         private readonly ChatHistoryService chatHistoryService;
 
         /// <summary>
@@ -69,6 +70,20 @@ namespace BlazorAIChat.Services
                     new OpenAIPromptExecutionSettings()
                     {
                         Temperature = 0
+                    })
+            };
+
+            promptRewriteAgent = new()
+            {
+                Name = "PromptRewriteAgent",
+                Kernel = kernel,
+                Instructions = """
+                    Rewrite the user prompt to remove all URLs but still make the question or request understandable.
+                """,
+                Arguments = new KernelArguments(
+                    new OpenAIPromptExecutionSettings()
+                    {
+                        Temperature = 0.3f
                     })
             };
 
@@ -252,22 +267,19 @@ namespace BlazorAIChat.Services
         /// <returns>The new prompt without URLs.</returns>
         private async Task<string> GenerateNewPromptForMessagesWithUrl(string theMessage)
         {
-            ArgumentNullException.ThrowIfNull(chatCompletionService);
 
-            var skChatHistory = new ChatHistory();
-            skChatHistory.AddSystemMessage("Rewrite the user prompt to remove all URLs but still make the question or request understandable.");
-            skChatHistory.AddUserMessage(theMessage);
-            PromptExecutionSettings settings = new()
+            // Create a chat history with the entire conversation
+            ChatHistory sessionSummary = new() { new ChatMessageContent(AuthorRole.User, theMessage) };
+            StringBuilder output = new();
+
+            // Get the updated prompt from the prompt rewrite agent
+            await foreach (var response in promptRewriteAgent.InvokeAsync(sessionSummary).ConfigureAwait(false))
             {
-                ExtensionData = new Dictionary<string, object>()
-                {
-                    { "Temperature", 0.3 }
-                }
-            };
+                output.Append(response.ToString());
+            }
+            var completionText = output.ToString();
 
-            // Get the rewritten prompt from the chat completion service
-            var result = await chatCompletionService.GetChatMessageContentAsync(skChatHistory, settings).ConfigureAwait(false);
-            return result.Items[0].ToString()!;
+            return completionText;
         }
 
         /// <summary>
