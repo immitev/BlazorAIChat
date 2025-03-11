@@ -1,0 +1,40 @@
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Web
+
+<div class="input-group">
+    <input type="text" class="form-control" placeholder="Enter your message" disabled="@IsResponding" @bind-value="UserMessage" @bind-value:event="oninput" @onkeydown="HandleKeyDown" />
+    <button class="btn btn-primary" @onclick="OnSendMessage">Send</button>
+    <InputFile @ref="InputFileRef" class="btn btn-warning" OnChange="OnFileSelected" disabled="@(IsFileInputDisabled || IsResponding)" />
+    <button class="btn btn-secondary" @onclick="OnStop">Stop</button>
+</div>
+
+@code {
+    [Parameter]
+    public string UserMessage { get; set; } = string.Empty;
+
+    [Parameter]
+    public bool IsResponding { get; set; }
+
+    [Parameter]
+    public EventCallback OnSendMessage { get; set; }
+
+    [Parameter]
+    public EventCallback OnStop { get; set; }
+
+    [Parameter]
+    public EventCallback<InputFileChangeEventArgs> OnFileSelected { get; set; }
+
+    [Parameter]
+    public bool IsFileInputDisabled { get; set; }
+
+    [Parameter]
+    public InputFile? InputFileRef { get; set; }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(UserMessage))
+        {
+            await OnSendMessage.InvokeAsync();
+        }
+    }
+}

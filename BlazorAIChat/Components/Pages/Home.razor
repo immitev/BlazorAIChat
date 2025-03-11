@@ -183,12 +183,14 @@ else
                     <div class="bg-primary text-light px-4 py-2 rounded-top-5 text-dark d-flex flex-column justify-content-center">
                         @if (currentSession is not null && currentSession?.SessionId != Models.Constants.EMPTY_SESSION)
                         {
-                            <div class="input-group">
-                                <input type="text" class="form-control" placeholder="Enter your message" disabled="@isResponding" @bind-value="userMessage" @bind-value:event="oninput" @onkeydown="HandleKeyDown" />
-                                <button class="btn btn-primary" @onclick="SendMessage">Send</button>
-                                <InputFile @ref="inputFile" class="btn btn-warning" OnChange="HandleFileSelected" disabled="@(isFileInputDisabled||isResponding)" />
-                                <button class="btn btn-secondary" @onclick="Stop">Stop</button>
-                            </div>                    
+                            <ChatInput 
+                                @bind-UserMessage="userMessage" 
+                                IsResponding="isResponding" 
+                                OnSendMessage="SendMessage" 
+                                OnStop="Stop" 
+                                OnFileSelected="HandleFileSelected" 
+                                IsFileInputDisabled="isFileInputDisabled" 
+                                InputFileRef="inputFile" />
                         }
                     </div>
                 </div>
@@ -196,7 +198,6 @@ else
         </div>
 
         <CustomModal IsVisible="isFileInputDisabled" Title="Document Processing" Message="Please wait, the document is uploading and processing. The amount of time this takes depends upon the size of the document." />
-
     }
 }
 
