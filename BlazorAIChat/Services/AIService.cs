@@ -11,6 +11,7 @@ using Microsoft.SemanticKernel.Agents;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace BlazorAIChat.Services
 {
@@ -297,6 +298,10 @@ namespace BlazorAIChat.Services
             // Get all messages from the session
             var messages = await chatHistoryService.GetSessionMessagesAsync(sessionId).ConfigureAwait(false);
             var conversationText = string.Join(" ", messages.Select(m => m.Prompt + " " + m.Completion));
+
+            //Strip base64 encoded content from the conversation text. We don't need to send all of that to the agent.
+            string pattern = @"data:image\/[a-zA-Z]+;base64,[^\s]+";
+            conversationText =  Regex.Replace(conversationText, pattern, string.Empty);
 
             // Create a chat history with the entire conversation
             ChatHistory sessionSummary = new() { new ChatMessageContent(AuthorRole.User, conversationText) };

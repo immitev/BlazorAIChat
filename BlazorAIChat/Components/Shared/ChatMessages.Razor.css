@@ -61,3 +61,11 @@
         background-color: #B5D9CB;
     }
 }
+
+.chat-user-message {
+    background-color: #A0D8EF;
+}
+
+.chat-assistant-message {
+    background-color: #D3D3D3
+}
