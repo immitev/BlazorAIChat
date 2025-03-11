@@ -49,21 +49,12 @@
                     {
                         <br/>
 
-                        @if (msg.Citations.Count > 1)
+                        @foreach (var citation in msg.Citations)
                         {
-                            <div class="badge bg-primary">Sources:</div>
-                        }
-                        else
-                        {
-                            <div class="badge bg-primary">Source:</div>
-                        }
-
-                        <ul>
-                            @foreach (var citation in msg.Citations)
-                            {
-                                <li>@(new MarkupString(citation))</li>
-                            }
-                        </ul>                                                             
+                            <ChatCitation File=""
+                                          PageNumber="0"
+                                          Quote="@citation" />
+                        }                                                        
                     }
                 }
             </div>

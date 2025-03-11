@@ -249,10 +249,10 @@ namespace BlazorAIChat.Services
                         }
 
                         // Add citations to the message
-                        if (result.SourceName.ToLower() != "content.url")
-                            message.Citations.Add($"{result.SourceName} ({(result.Partitions.Max(x => x.Relevance) * 100).ToString("F2")}%)");
+                        if (result.SourceName.ToLower() == "content.url")
+                            message.Citations.Add($"{result.SourceUrl}");
                         else
-                            message.Citations.Add($"<a href='{result.SourceUrl}' target='_blank'>{result.SourceUrl}</a> ({(result.Partitions.Max(x => x.Relevance) * 100).ToString("F2")}%)");
+                            message.Citations.Add($"{result.SourceName}");
                     }
                     history.AddUserMessage("----------------------------------");
                 }
