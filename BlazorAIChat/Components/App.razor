@@ -19,7 +19,12 @@
     <script>
         function scrollToBottom(element) {
             var elem = document.getElementById(element);
-            elem.scrollTop = elem.scrollHeight;
+            if (elem) {
+                elem.scroll({
+                    top: elem.scrollHeight,
+                    behavior: 'smooth'
+                });
+            }
             return true;
         }
 
