@@ -4,7 +4,8 @@
 <div class="input-group">
     <input type="text" class="form-control" placeholder="Enter your message" disabled="@IsResponding" @bind-value="UserMessage" @bind-value:event="oninput" @onkeydown="HandleKeyDown" />
     <button class="btn btn-primary" @onclick="SendMessage">Send</button>
-    <InputFile @ref="InputFileRef" class="btn btn-warning" OnChange="OnFileSelected" disabled="@(IsFileInputDisabled || IsResponding)" />
+    <label class="btn file-selector" for="fileInput">Upload File</label>
+    <InputFile id="fileInput" @ref="InputFileRef" class="d-none" OnChange="OnFileSelected" disabled="@(IsFileInputDisabled || IsResponding)" />
     <button class="btn btn-secondary" @onclick="OnStop">Stop</button>
 </div>
 
