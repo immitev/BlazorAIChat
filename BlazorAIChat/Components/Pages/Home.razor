@@ -386,13 +386,14 @@ else
                             if (chunk?.Content != null)
                             {
                                 markdownBuilder.Append(chunk.Content);
-                                message.Completion = markdownBuilder.ToString();
-
-                                // Scroll to the bottom of the chat window
-                                await js.InvokeVoidAsync("scrollToBottom", "MessagesInChatdiv");
-                                StateHasChanged();
                             }
                         }
+
+                        message.Completion = markdownBuilder.ToString();
+
+                        // Scroll to the bottom of the chat window
+                        await js.InvokeVoidAsync("scrollToBottom", "MessagesInChatdiv");
+                        StateHasChanged();
 
                     }
                     message.Completion = markdownBuilder.ToString();
