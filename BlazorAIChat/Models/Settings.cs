@@ -26,6 +26,7 @@
         public string Model { get; set; } = string.Empty;
         public int MaxInputTokens { get; set; } = 128000;
         public bool SupportsImages { get; set; } = false;
+        public int ResponseChunkSize { get; set; } = 50;
     }
 
     public class AzureOpenAIEmbeddingSettings

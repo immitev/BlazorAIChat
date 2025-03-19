@@ -79,13 +79,7 @@ else
                 <div class="h-100 mh-100 d-flex flex-column overflow-hidden justify-content-start">
                     <div class="w-100 navbar navbar-dark bg-primary d-flex flex-row px-4 justify-content-between flex-nowrap">
                         <div class="d-flex flex-row justify-content-start">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" height="30" fill="currentColor" class="text-light">
-                                <path d="M415.98 265.82v-.27a17.24 17.24 0 1 0 .01.27ZM224.4 321.87a17.24 17.24 0 1 0 34.48 0 17.24 17.24 0 0 0-34.48 0Z" />
-                                <path d="M397.92 209.51C395.91 95.77 266.41 51.59 182.48 96.66l-.12 145.45a5.39 5.39 0 0 0 5.39 5.39h41.76a18.85 18.85 0 0 1 18.86 18.86v25.6a29.36 29.36 0 1 1-36.1 28.56 29.1 29.1 0 0 1 22.9-28.56v-26.94a5.65 5.65 0 0 0-5.66-5.66h-41.76a18.59 18.59 0 0 1-18.59-18.59v-135.9c-21.08 14.76-38.2 36.03-47.96 64.23-163.09 22.89-139.5 256.6 22.91 252.74h14.81V305.98a5.39 5.39 0 0 0-5.39-5.39h-23.71a29.36 29.36 0 1 1 0-13.2h23.71a18.59 18.59 0 0 1 18.59 18.59v115.86h148.46V210.59a5.39 5.39 0 0 0-5.39-5.39h-28.83a29.36 29.36 0 1 1-28.56-36.1 29.1 29.1 0 0 1 28.56 22.9h27.75a18.59 18.59 0 0 1 18.59 18.59v94.84h53.89a5.66 5.66 0 0 0 5.66-5.66v-5.39a29.38 29.38 0 0 1 6.73-57.94l1.1-.02a29.37 29.37 0 0 1 29.35 29.39 29.36 29.36 0 0 1-22.9 28.56v5.39a18.85 18.85 0 0 1-18.86 18.86h-53.89v103.2h43.38c61.49 2.64 114.03-46.08 115.32-107.78-1.2-53.49-41.47-98-94.58-104.54Z" />
-                                <circle cx="101" cy="293.85" r="17.24" />
-                                <circle cx="257.81" cy="198.46" r="17.24" />
-                                <path d="m182.49 96.66-.07.05.07-.04Z" />
-                            </svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" height="30" fill="currentColor" class="text-light"><path d="M415.98 265.82v-.27a17.24 17.24 0 1 0 .01.27ZM224.4 321.87a17.24 17.24 0 1 0 34.48 0 17.24 17.24 0 0 0-34.48 0" /><path d="M397.92 209.51C395.91 95.77 266.41 51.59 182.48 96.66l-.12 145.45a5.39 5.39 0 0 0 5.39 5.39h41.76a18.85 18.85 0 0 1 18.86 18.86v25.6a29.36 29.36 0 1 1-36.1 28.56 29.1 29.1 0 0 1 22.9-28.56v-26.94a5.65 5.65 0 0 0-5.66-5.66h-41.76a18.59 18.59 0 0 1-18.59-18.59v-135.9c-21.08 14.76-38.2 36.03-47.96 64.23-163.09 22.89-139.5 256.6 22.91 252.74h14.81V305.98a5.39 5.39 0 0 0-5.39-5.39h-23.71a29.36 29.36 0 1 1 0-13.2h23.71a18.59 18.59 0 0 1 18.59 18.59v115.86h148.46V210.59a5.39 5.39 0 0 0-5.39-5.39h-28.83a29.36 29.36 0 1 1-28.56-36.1 29.1 29.1 0 0 1 28.56 22.9h27.75a18.59 18.59 0 0 1 18.59 18.59v94.84h53.89a5.66 5.66 0 0 0 5.66-5.66v-5.39a29.38 29.38 0 0 1 6.73-57.94l1.1-.02a29.37 29.37 0 0 1 29.35 29.39 29.36 29.36 0 0 1-22.9 28.56v5.39a18.85 18.85 0 0 1-18.86 18.86h-53.89v103.2h43.38c61.49 2.64 114.03-46.08 115.32-107.78-1.2-53.49-41.47-98-94.58-104.54Z" /><circle cx="101" cy="293.85" r="17.24" /><circle cx="257.81" cy="198.46" r="17.24" /><path d="m182.49 96.66-.07.05.07-.04Z" /></svg>
                             <span class="navbar-brand mb-0 ms-1 h1">Blazor Azure OpenAI Chat</span>
                             @if (appSettings.Value.UsesAzureAISearch)
                             {
@@ -386,16 +380,20 @@ else
                             break;
                         }
 
-                        //If the chat update has content, then append it to the results
-                        if (chatUpdate?.Content != null)
+                        foreach (var chunk in chatUpdate)
                         {
-                            markdownBuilder.Append(chatUpdate.Content);
-                            message.Completion = markdownBuilder.ToString();
+                            //If the chat update has content, then append it to the results
+                            if (chunk?.Content != null)
+                            {
+                                markdownBuilder.Append(chunk.Content);
+                                message.Completion = markdownBuilder.ToString();
 
-                            // Scroll to the bottom of the chat window
-                            await js.InvokeVoidAsync("scrollToBottom", "MessagesInChatdiv");
-                            StateHasChanged();
+                                // Scroll to the bottom of the chat window
+                                await js.InvokeVoidAsync("scrollToBottom", "MessagesInChatdiv");
+                                StateHasChanged();
+                            }
                         }
+
                     }
                     message.Completion = markdownBuilder.ToString();
                     aiService.history.AddAssistantMessage(markdownBuilder.ToString());

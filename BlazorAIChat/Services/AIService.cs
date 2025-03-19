@@ -193,7 +193,7 @@ namespace BlazorAIChat.Services
         /// <param name="currentSession">The current session.</param>
         /// <param name="currentUser">The current user.</param>
         /// <returns>An asynchronous enumerable of streaming chat message content.</returns>
-        public async Task<IAsyncEnumerable<StreamingChatMessageContent>> GetChatResponseAsync(string prompt, Message message, Session currentSession, User currentUser)
+        public async Task<IAsyncEnumerable<List<StreamingChatMessageContent>>> GetChatResponseAsync(string prompt, Message message, Session currentSession, User currentUser)
         {
             ArgumentNullException.ThrowIfNull(textTokenizer);
             ArgumentNullException.ThrowIfNull(chatCompletionService);
@@ -205,8 +205,34 @@ namespace BlazorAIChat.Services
             history = AIUtils.CleanUpHistory(history, textTokenizer, settings.AzureOpenAIChatCompletion.MaxInputTokens);
 
             // Get the chat response as a stream of messages
-            return chatCompletionService.GetStreamingChatMessageContentsAsync(history);
+            var streamingMessages = chatCompletionService.GetStreamingChatMessageContentsAsync(history);
+
+            // Buffer and yield messages in chunks
+            return BufferMessagesInChunks(streamingMessages, settings.AzureOpenAIChatCompletion.ResponseChunkSize);
         }
+
+        private async IAsyncEnumerable<List<StreamingChatMessageContent>> BufferMessagesInChunks(IAsyncEnumerable<StreamingChatMessageContent> streamingMessages, int chunkSize)
+        {
+            List<StreamingChatMessageContent> buffer = new List<StreamingChatMessageContent>(chunkSize);
+
+            await foreach (var message in streamingMessages)
+            {
+                buffer.Add(message);
+
+                if (buffer.Count >= chunkSize)
+                {
+                    yield return new List<StreamingChatMessageContent>(buffer);
+                    buffer.Clear();
+                }
+            }
+
+            // Yield any remaining messages
+            if (buffer.Count > 0)
+            {
+                yield return new List<StreamingChatMessageContent>(buffer);
+            }
+        }
+
 
         /// <summary>
         /// Performs Retrieval-Augmented Generation (RAG) on the given prompt.
