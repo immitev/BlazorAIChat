@@ -57,7 +57,8 @@ The appsettings.json file has a few configuration parameters that must be set fo
     "Endpoint": "",
     "ApiKey": "",
     "Model": "",
-    "SupportsImages": false
+    "SupportsImages": false,
+    "ResponseChunkSize": 40
   },
   "AzureOpenAIEmbedding": {
     "Model": ""
@@ -81,6 +82,7 @@ The appsettings.json file has a few configuration parameters that must be set fo
 - **AzureOpenAIChatCompletion Configuration**: 
   - Include your Azure OpenAI endpoint URL, API Key, and the name of the deployed chat model you intend to use.
   - If the model supports images, set `SupportsImages` to `true`.
+  - ResponseChunkSize defines the number of response chunks from the Azure OpenAI service that need to be received before the UI is updated. The higher the number, the less UI updates are required, which improves the Blazor app performance.
 
 - **AzureOpenAIEmbedding Configuration**: 
   - Specify the deployed embedding model you plan to use.
