@@ -77,7 +77,14 @@ The appsettings.json file has a few configuration parameters that must be set fo
 "AzureAISearch": {
   "Endpoint": "",
   "ApiKey": ""
-}
+},
+"MCPServers": [
+  {
+    "Name": "MCPHttpServer",
+    "Version": "1.0.0.0",
+    "Endpoint": "https://localhost:7194"
+  }
+]
   ```
 
 - **AzureOpenAIChatCompletion Configuration**: 
@@ -100,6 +107,10 @@ This is an optional knowledge store that if configured will replace both the fil
 
 - **EasyAuth Configuration**: 
   - If utilizing EasyAuth with Azure App Service, it is recommended to set `RequireEasyAuth` to `true` to ensure that users are fully authenticated and not recognized as guests. This setting is set to true by default.
+
+- **MCPServers Configuration**:
+This section allows you to configure multiple remote anonymous MCP servers that provide tools to the AI for responding to user's requests. This section
+is not required. Tools available on MCP servers are only determined when the web application starts up. If a remote MCP server updates the list of available tools you will need to restart this web application to use them. If the web application cannot communicate with the MCP server, it will ignore it.
 
 This solution has been tested with the `gpt-4o` chat model and the `text-embedding-ada-002` model. Other models can be integrated and tested as needed.
 
