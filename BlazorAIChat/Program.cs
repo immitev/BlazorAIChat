@@ -72,5 +72,9 @@ if (!Directory.Exists("KNN"))
 {
     Directory.CreateDirectory("KNN");
 }
+if (!Directory.Exists("SFS"))
+{
+    Directory.CreateDirectory("SFS");
+}
 
 app.Run();

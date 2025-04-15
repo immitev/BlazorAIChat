@@ -5,11 +5,12 @@ using BlazorAIChat.Utils;
 using Microsoft.Extensions.Options;
 using Microsoft.KernelMemory;
 using Microsoft.KernelMemory.AI;
-using Microsoft.KernelMemory.AI.OpenAI;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.Agents;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
+using Microsoft.SemanticKernel.Embeddings;
+using System.Configuration;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -27,6 +28,7 @@ namespace BlazorAIChat.Services
         private readonly HttpClient? httpClient;
         private readonly ITextTokenizer? textTokenizer;
         private readonly IChatCompletionService? chatCompletionService;
+        private readonly ITextEmbeddingGenerationService? textEmbeddingGenerationService;
         public ChatHistory history { get; private set; } = new ChatHistory();
         private readonly AIChatDBContext dbContext;
         private readonly ChatCompletionAgent sessionSummaryAgent;
@@ -88,30 +90,18 @@ namespace BlazorAIChat.Services
                     })
             };
 
-            var knnDirectory = "KNN";
+
+
+            chatCompletionService = kernel.GetRequiredService<IChatCompletionService>();
+            textEmbeddingGenerationService = kernel.GetRequiredService<ITextEmbeddingGenerationService>();
+
+            var SimpleVectorDbDirectory = "KNN";
+            var SimpleFileStorageDirectory = "SFS";
 
             // Build kernel memory with various configurations based on settings
             var kernelMemoryBuilder = new KernelMemoryBuilder()
-                .WithAzureOpenAITextEmbeddingGeneration(new AzureOpenAIConfig
-                {
-                    APIType = AzureOpenAIConfig.APITypes.EmbeddingGeneration,
-                    Endpoint = settings.AzureOpenAIChatCompletion.Endpoint,
-                    Deployment = settings.AzureOpenAIEmbedding.Model,
-                    Auth = AzureOpenAIConfig.AuthTypes.APIKey,
-                    APIKey = settings.AzureOpenAIChatCompletion.ApiKey,
-                    MaxTokenTotal = settings.AzureOpenAIEmbedding.MaxInputTokens,
-                    MaxRetries = 3
-                }, httpClient: httpClient)
-                .WithAzureOpenAITextGeneration(new AzureOpenAIConfig
-                {
-                    APIType = AzureOpenAIConfig.APITypes.ChatCompletion,
-                    Endpoint = settings.AzureOpenAIChatCompletion.Endpoint,
-                    Deployment = settings.AzureOpenAIChatCompletion.Model,
-                    Auth = AzureOpenAIConfig.AuthTypes.APIKey,
-                    APIKey = settings.AzureOpenAIChatCompletion.ApiKey,
-                    MaxTokenTotal = settings.AzureOpenAIChatCompletion.MaxInputTokens,
-                    MaxRetries = 3
-                }, httpClient: httpClient, textTokenizer: textTokenizer);
+                .WithSemanticKernelTextEmbeddingGenerationService(textEmbeddingGenerationService, new Microsoft.KernelMemory.SemanticKernel.SemanticKernelConfig() { MaxTokenTotal = settings.AzureOpenAIEmbedding.MaxInputTokens })
+                .WithAzureOpenAITextGeneration(new AzureOpenAIConfig() { Auth = AzureOpenAIConfig.AuthTypes.APIKey, APIKey = settings.AzureOpenAIChatCompletion.ApiKey, Deployment = settings.AzureOpenAIChatCompletion.Model, Endpoint = settings.AzureOpenAIChatCompletion.Endpoint }, null, httpClient);
 
             // Configure kernel memory based on specific settings
             if (settings.UsesAzureAISearch)
@@ -123,6 +113,7 @@ namespace BlazorAIChat.Services
                     Auth = AzureAISearchConfig.AuthTypes.APIKey,
                     UseHybridSearch = false
                 });
+
             }
             else if (settings.UsesPostgreSQL)
             {
@@ -133,7 +124,9 @@ namespace BlazorAIChat.Services
             }
             else
             {
-                kernelMemoryBuilder = kernelMemoryBuilder.WithSimpleVectorDb(new Microsoft.KernelMemory.MemoryStorage.DevTools.SimpleVectorDbConfig { StorageType = Microsoft.KernelMemory.FileSystem.DevTools.FileSystemTypes.Disk, Directory = knnDirectory });
+                kernelMemoryBuilder = kernelMemoryBuilder
+                    .WithSimpleVectorDb(new Microsoft.KernelMemory.MemoryStorage.DevTools.SimpleVectorDbConfig { StorageType = Microsoft.KernelMemory.FileSystem.DevTools.FileSystemTypes.Disk, Directory = SimpleVectorDbDirectory })
+                    .WithSimpleFileStorage(new Microsoft.KernelMemory.DocumentStorage.DevTools.SimpleFileStorageConfig() { StorageType = Microsoft.KernelMemory.FileSystem.DevTools.FileSystemTypes.Disk, Directory= SimpleFileStorageDirectory });
             }
 
             // Add Azure Document Intelligence if supported
@@ -146,9 +139,7 @@ namespace BlazorAIChat.Services
                     Auth = AzureAIDocIntelConfig.AuthTypes.APIKey
                 });
             }
-
             kernelMemory = kernelMemoryBuilder.Build<MemoryServerless>();
-            chatCompletionService = kernel.GetRequiredService<IChatCompletionService>();
         }
 
         /// <summary>
