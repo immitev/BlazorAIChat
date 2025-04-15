@@ -33,6 +33,7 @@
     <PackageReference Include="Microsoft.SemanticKernel.Agents.Core" Version="1.46.0" />
     <PackageReference Include="Microsoft.SemanticKernel.Connectors.AzureCosmosDBMongoDB" Version="1.17.1-alpha" />
     <PackageReference Include="Microsoft.SemanticKernel.Connectors.Sqlite" Version="1.46.0-preview" />
+    <PackageReference Include="ModelContextProtocol" Version="0.1.0-preview.9" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="System.IO.Packaging" Version="9.0.4" />
   </ItemGroup>

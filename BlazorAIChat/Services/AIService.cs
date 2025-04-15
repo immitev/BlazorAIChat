@@ -8,8 +8,11 @@ using Microsoft.KernelMemory.AI;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.Agents;
 using Microsoft.SemanticKernel.ChatCompletion;
+using Microsoft.SemanticKernel.Connectors.AzureOpenAI;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
 using Microsoft.SemanticKernel.Embeddings;
+using ModelContextProtocol.Client;
+using ModelContextProtocol.Protocol.Transport;
 using System.Configuration;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -56,8 +59,26 @@ namespace BlazorAIChat.Services
                 .AddAzureOpenAIChatCompletion(settings.AzureOpenAIChatCompletion.Model, settings.AzureOpenAIChatCompletion.Endpoint, settings.AzureOpenAIChatCompletion.ApiKey, httpClient: httpClient)
                 .AddAzureOpenAITextEmbeddingGeneration(settings.AzureOpenAIEmbedding.Model, settings.AzureOpenAIChatCompletion.Endpoint, settings.AzureOpenAIChatCompletion.ApiKey, httpClient: httpClient);
 
+            //Add configured MCP Servers
+            List<IMcpClient> remoteMcpClients = new List<IMcpClient>();
+            foreach (var server in settings.MCPServers)
+            {
+                try
+                {
+                    IMcpClient remoteMcpClient = McpClientFactory.CreateAsync(new SseClientTransport(transportOptions: new SseClientTransportOptions() { Endpoint = new Uri($"{server.Endpoint}/sse") }), new McpClientOptions() { ClientInfo = new() { Name = server.Name, Version = server.Version } }).GetAwaiter().GetResult();
+                    IList<McpClientTool> remoteTools = remoteMcpClient.ListToolsAsync().GetAwaiter().GetResult();
+                    builder.Plugins.AddFromFunctions($"{server.Name}", remoteTools.Select(mcpClientTool => mcpClientTool.AsKernelFunction()));
+                    remoteMcpClients.Add(remoteMcpClient);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error connecting to MCP server {server.Name}: {ex.Message}");
+                }
+            }
+
             // Add logging services
             builder.Services.AddLogging(services => services.AddConsole().SetMinimumLevel(LogLevel.Trace));
+
             kernel = builder.Build();
 
             // Initialize the session summary agent with specific instructions
@@ -196,7 +217,13 @@ namespace BlazorAIChat.Services
             history = AIUtils.CleanUpHistory(history, textTokenizer, settings.AzureOpenAIChatCompletion.MaxInputTokens);
 
             // Get the chat response as a stream of messages
-            var streamingMessages = chatCompletionService.GetStreamingChatMessageContentsAsync(history);
+            AzureOpenAIPromptExecutionSettings executionSettings = new()
+            {
+                Temperature = 0,
+                FunctionChoiceBehavior = FunctionChoiceBehavior.Auto(options: new() { RetainArgumentTypes = true })
+            };
+
+            var streamingMessages = chatCompletionService.GetStreamingChatMessageContentsAsync(history, executionSettings,kernel);
 
             // Buffer and yield messages in chunks
             return BufferMessagesInChunks(streamingMessages, settings.AzureOpenAIChatCompletion.ResponseChunkSize);
