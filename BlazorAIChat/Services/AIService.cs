@@ -69,7 +69,9 @@ namespace BlazorAIChat.Services
                 {
                     Name = server.Name,
                     // Point the client to the MCPServer server executable
-                    Command = server.Endpoint
+                    Command = server.Endpoint,
+                    Arguments = server.Args,
+                    EnvironmentVariables = server.Env,
                 })).GetAwaiter().GetResult();
 
                 IList<McpClientTool> localTools = localMCPClient.ListToolsAsync().GetAwaiter().GetResult();
@@ -84,7 +86,7 @@ namespace BlazorAIChat.Services
                 {
                     //Configure HTTP Headers
                     HttpClient httpClient = new HttpClient();
-                    if (server.Headers!=null)
+                    if (server.Headers.Count>0)
                     {
                         foreach (var header in server.Headers)
                         {

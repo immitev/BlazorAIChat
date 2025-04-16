@@ -84,8 +84,14 @@ The appsettings.json file has a few configuration parameters that must be set fo
     "Name": "MCPServerName",
     "Version": "1.0.0.0",
     "Endpoint": "[uri|file path]",
+    "Args": {
+
+    },
     "Headers": {
       "header key": "header value"
+    },
+    "Env": {
+      "ENV_VAR": "Env value"
     }
   }
 ]
@@ -119,7 +125,9 @@ is not required. Tools available on MCP servers are only determined when the web
   - **Name**: The name of the MCP server. Must only contain alphanumeric values with no spaces. Underlines are allowed.
   - **Version**: Version number for the MCP Server
   - **Endpoint**: URL or file path to the MCP Server
+  - **Args**: List of command line arguments for stdio transport MCP Servers.
   - **Headers**: A list of http headers to send when connecting to MCP servers using sse transport.
+  - **Env**: A list of environment variables and values for use when connecting to MCP servers using stdio transport.
 
 This solution has been tested with the `gpt-4o` chat model and the `text-embedding-ada-002` model. Other models can be integrated and tested as needed.
 

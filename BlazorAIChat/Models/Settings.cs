@@ -66,6 +66,8 @@
         public string Name { get; set; } = string.Empty;
         public string Version { get; set; } = string.Empty;
         public string Type { get; set; } = string.Empty;
-        public dynamic Headers { get; set; } = new System.Dynamic.ExpandoObject();
+        public List<string> Args { get; set; } = new List<string>();
+        public Dictionary<string,string> Headers { get; set; } = new Dictionary<string, string>();
+        public Dictionary<string,string> Env { get; set; } = new Dictionary<string, string>();
     }
 }
