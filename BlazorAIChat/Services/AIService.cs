@@ -60,15 +60,42 @@ namespace BlazorAIChat.Services
                 .AddAzureOpenAITextEmbeddingGeneration(settings.AzureOpenAIEmbedding.Model, settings.AzureOpenAIChatCompletion.Endpoint, settings.AzureOpenAIChatCompletion.ApiKey, httpClient: httpClient);
 
             //Add configured MCP Servers
-            List<IMcpClient> remoteMcpClients = new List<IMcpClient>();
-            foreach (var server in settings.MCPServers)
+            List<IMcpClient> McpClients = new List<IMcpClient>();
+
+            //handle STDIO servers
+            foreach (var server in settings.MCPServers.Where(x=>x.Type.ToLower()=="stdio"))
+            {
+                IMcpClient localMCPClient = McpClientFactory.CreateAsync(new StdioClientTransport(new()
+                {
+                    Name = server.Name,
+                    // Point the client to the MCPServer server executable
+                    Command = server.Endpoint
+                })).GetAwaiter().GetResult();
+
+                IList<McpClientTool> localTools = localMCPClient.ListToolsAsync().GetAwaiter().GetResult();
+                builder.Plugins.AddFromFunctions($"{server.Name}", localTools.Select(mcpClientTool => mcpClientTool.AsKernelFunction()));
+                McpClients.Add(localMCPClient);
+            }
+
+            //handle SSE servers
+            foreach (var server in settings.MCPServers.Where(x=>x.Type.ToLower()=="sse"))
             {
                 try
                 {
-                    IMcpClient remoteMcpClient = McpClientFactory.CreateAsync(new SseClientTransport(transportOptions: new SseClientTransportOptions() { Endpoint = new Uri($"{server.Endpoint}/sse") }), new McpClientOptions() { ClientInfo = new() { Name = server.Name, Version = server.Version } }).GetAwaiter().GetResult();
+                    //Configure HTTP Headers
+                    HttpClient httpClient = new HttpClient();
+                    if (server.Headers!=null)
+                    {
+                        foreach (var header in server.Headers)
+                        {
+                            httpClient.DefaultRequestHeaders.Add(header.Key, header.Value);
+                        }
+                    }
+
+                    IMcpClient remoteMcpClient = McpClientFactory.CreateAsync(new SseClientTransport(httpClient: httpClient, transportOptions: new SseClientTransportOptions() { Endpoint = new Uri($"{server.Endpoint}/sse") }), new McpClientOptions() { ClientInfo = new() { Name = server.Name, Version = server.Version } }).GetAwaiter().GetResult();
                     IList<McpClientTool> remoteTools = remoteMcpClient.ListToolsAsync().GetAwaiter().GetResult();
                     builder.Plugins.AddFromFunctions($"{server.Name}", remoteTools.Select(mcpClientTool => mcpClientTool.AsKernelFunction()));
-                    remoteMcpClients.Add(remoteMcpClient);
+                    McpClients.Add(remoteMcpClient);
                 }
                 catch (Exception ex)
                 {

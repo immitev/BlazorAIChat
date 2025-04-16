@@ -80,9 +80,13 @@ The appsettings.json file has a few configuration parameters that must be set fo
 },
 "MCPServers": [
   {
-    "Name": "MCPHttpServer",
+    "Type": "[sse|stdio]"
+    "Name": "MCPServerName",
     "Version": "1.0.0.0",
-    "Endpoint": "https://localhost:7194"
+    "Endpoint": "[uri|file path]",
+    "Headers": {
+      "header key": "header value"
+    }
   }
 ]
   ```
@@ -109,8 +113,13 @@ This is an optional knowledge store that if configured will replace both the fil
   - If utilizing EasyAuth with Azure App Service, it is recommended to set `RequireEasyAuth` to `true` to ensure that users are fully authenticated and not recognized as guests. This setting is set to true by default.
 
 - **MCPServers Configuration**:
-This section allows you to configure multiple remote anonymous MCP servers that provide tools to the AI for responding to user's requests. This section
-is not required. Tools available on MCP servers are only determined when the web application starts up. If a remote MCP server updates the list of available tools you will need to restart this web application to use them. If the web application cannot communicate with the MCP server, it will ignore it.
+This section allows you to configure multiple MCP servers that provide tools to the AI for responding to user's requests. This section
+is not required. Tools available on MCP servers are only determined when the web application starts up. If a MCP server updates the list of available tools you will need to restart this web application to use them. If the web application cannot communicate with the MCP server, it will ignore it.
+  - **Type**: Defineds the transport type for the MCP Server. This can be stdio or sse.
+  - **Name**: The name of the MCP server. Must only contain alphanumeric values with no spaces. Underlines are allowed.
+  - **Version**: Version number for the MCP Server
+  - **Endpoint**: URL or file path to the MCP Server
+  - **Headers**: A list of http headers to send when connecting to MCP servers using sse transport.
 
 This solution has been tested with the `gpt-4o` chat model and the `text-embedding-ada-002` model. Other models can be integrated and tested as needed.
 

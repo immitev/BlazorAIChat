@@ -65,5 +65,7 @@
         public string Endpoint { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
         public string Version { get; set; } = string.Empty;
+        public string Type { get; set; } = string.Empty;
+        public dynamic Headers { get; set; } = new System.Dynamic.ExpandoObject();
     }
 }
