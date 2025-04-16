@@ -23,7 +23,7 @@ This solution utilizes several open source libraries to help with document inges
 - **Data Management**: Offers the ability to clear chat history and delete data stored in the user's knowledge base.
 - **Retry Handling**: Automatically pauses and retries calls to Azure OpenAI if it exceeds the API rate limit.
 - **Chat History Pruning**: Designed to help ensure that the requests to Azure OpenAI do not exceed the context window.
-- **Experimental MCP**: Utilize tools from anonymous remote Model Context Protocol servers over http/s
+- **Experimental MCP**: Utilize tools from Model Context Protocol servers
 
 
 ## Chat Over Documents (RAG)
