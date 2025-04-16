@@ -2,7 +2,7 @@
 ##### BlazorAIChat: AI-Powered Chat Application
 
 ## Overview
-This is a sample .NET 8 Blazor Interactive Server application for chatting with Azure OpenAI Models. Users may upload TXT, DOCX, XLSX, PPTX or PDF documents to a knowledge base for the AI to use when responding. If configured, it can also upload images for those AI models that support images in chat.
+This is a sample .NET 9 Blazor Interactive Server application for chatting with Azure OpenAI Models. Users may upload TXT, DOCX, XLSX, PPTX or PDF documents to a knowledge base for the AI to use when responding. If configured, it can also upload images for those AI models that support images in chat.
 
 ## Components
 This solution utilizes several open source libraries to help with document ingestion and chat display. These projects include:
@@ -95,7 +95,7 @@ The appsettings.json file has a few configuration parameters that must be set fo
     }
   }
 ]
-  ```
+```
 
 - **AzureOpenAIChatCompletion Configuration**: 
   - Include your Azure OpenAI endpoint URL, API Key, and the name of the deployed chat model you intend to use.
