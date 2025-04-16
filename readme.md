@@ -84,9 +84,9 @@ The appsettings.json file has a few configuration parameters that must be set fo
     "Name": "MCPServerName",
     "Version": "1.0.0.0",
     "Endpoint": "[uri|file path]",
-    "Args": {
+    "Args": [
 
-    },
+    ],
     "Headers": {
       "header key": "header value"
     },
