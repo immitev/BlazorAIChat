@@ -245,6 +245,8 @@ namespace BlazorAIChat.Services
             // Clean up the chat history to fit within the token limit
             history = AIUtils.CleanUpHistory(history, textTokenizer, settings.AzureOpenAIChatCompletion.MaxInputTokens);
 
+            IAsyncEnumerable<StreamingChatMessageContent> streamingMessages;
+
             // Get the chat response as a stream of messages
             AzureOpenAIPromptExecutionSettings executionSettings = new()
             {
@@ -252,8 +254,8 @@ namespace BlazorAIChat.Services
                 FunctionChoiceBehavior = FunctionChoiceBehavior.Auto(options: new() { RetainArgumentTypes = true })
             };
 
-            var streamingMessages = chatCompletionService.GetStreamingChatMessageContentsAsync(history, executionSettings,kernel);
-
+            streamingMessages = chatCompletionService.GetStreamingChatMessageContentsAsync(history, executionSettings, kernel);
+ 
             // Buffer and yield messages in chunks
             return BufferMessagesInChunks(streamingMessages, settings.AzureOpenAIChatCompletion.ResponseChunkSize);
         }
@@ -348,12 +350,20 @@ namespace BlazorAIChat.Services
             ChatHistory sessionSummary = new() { new ChatMessageContent(AuthorRole.User, theMessage) };
             StringBuilder output = new();
 
+            Microsoft.SemanticKernel.Agents.AgentThread? agentThread = null;
             // Get the updated prompt from the prompt rewrite agent
-            await foreach (var response in promptRewriteAgent.InvokeAsync(sessionSummary).ConfigureAwait(false))
+            await foreach (var response in promptRewriteAgent.InvokeAsync(sessionSummary,agentThread).ConfigureAwait(false))
             {
-                output.Append(response.ToString());
+                output.Append(response.Message.ToString());
+                agentThread = response.Thread;
             }
             var completionText = output.ToString();
+
+            // Delete the thread if required.
+            if (agentThread is not null)
+            {
+                await agentThread.DeleteAsync();
+            }
 
             return completionText;
         }
@@ -380,11 +390,19 @@ namespace BlazorAIChat.Services
             ChatHistory sessionSummary = new() { new ChatMessageContent(AuthorRole.User, conversationText) };
             StringBuilder output = new();
             // Get the summary from the session summary agent
-            await foreach (var response in sessionSummaryAgent.InvokeAsync(sessionSummary).ConfigureAwait(false))
+            Microsoft.SemanticKernel.Agents.AgentThread? agentThread = null;
+            await foreach (var response in sessionSummaryAgent.InvokeAsync(sessionSummary, agentThread).ConfigureAwait(false))
             {
-                output.Append(response.ToString());
+                output.Append(response.Message.ToString());
+                agentThread = response.Thread;
             }
             var completionText = output.ToString();
+
+            // Delete the thread if required.
+            if (agentThread is not null)
+            {
+                await agentThread.DeleteAsync();
+            }
 
             // Update the session name with the summary
             var session = await chatHistoryService.GetSessionAsync(sessionId).ConfigureAwait(false);
