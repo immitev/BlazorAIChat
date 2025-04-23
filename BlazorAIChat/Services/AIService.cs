@@ -23,7 +23,6 @@ namespace BlazorAIChat.Services
     {
 #pragma warning disable SKEXP0010, SKEXP0001, SKEXP0020, KMEXP00
         private readonly AppSettings settings;
-        private readonly Kernel kernel;
         private readonly MemoryServerless? kernelMemory;
         private readonly HttpClient? httpClient;
         private readonly ITextTokenizer? chatCompletionTokenizer;
@@ -35,6 +34,8 @@ namespace BlazorAIChat.Services
         private readonly ChatCompletionAgent sessionSummaryAgent;
         private readonly ChatCompletionAgent promptRewriteAgent;
         private readonly ChatHistoryService chatHistoryService;
+        private readonly ILogger<AIService> logger;
+        private readonly Kernel kernel;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="AIService"/> class.
@@ -43,18 +44,20 @@ namespace BlazorAIChat.Services
         /// <param name="chatHistoryService">The chat history service.</param>
         /// <param name="httpClientFactory">The HTTP client factory.</param>
         /// <param name="dbContext">The database context.</param>
-        public AIService(IOptions<AppSettings> appSettings, ChatHistoryService chatHistoryService, IHttpClientFactory httpClientFactory, AIChatDBContext dbContext)
+        /// <param name="kernel">The Semantic Kernel instance.</param>
+        public AIService(IOptions<AppSettings> appSettings, ChatHistoryService chatHistoryService, IHttpClientFactory httpClientFactory, AIChatDBContext dbContext, ILogger<AIService> logger, Kernel kernel)
         {
             this.dbContext = dbContext;
             this.chatHistoryService = chatHistoryService;
-
+            this.logger = logger;
+            this.kernel = kernel;
             settings = appSettings.Value;
             httpClient = httpClientFactory.CreateClient("retryHttpClient");
             chatCompletionTokenizer = TokenizerFactory.GetTokenizerForModel(settings.AzureOpenAIChatCompletion.Tokenizer);
             embeddingTokenizer = TokenizerFactory.GetTokenizerForModel(settings.AzureOpenAIEmbedding.Tokenizer);
 
-            // Initialize Kernel and related components
-            kernel = InitializeKernel();
+            logger.LogInformation("Initializing AIService with settings");
+
             chatCompletionService = kernel.GetRequiredService<IChatCompletionService>();
             textEmbeddingGenerationService = kernel.GetRequiredService<ITextEmbeddingGenerationService>();
 
@@ -63,30 +66,6 @@ namespace BlazorAIChat.Services
 
             // Initialize Kernel Memory
             kernelMemory = InitializeKernelMemory();
-        }
-
-        private Kernel InitializeKernel()
-        {
-            var builder = Kernel.CreateBuilder()
-                .AddAzureOpenAIChatCompletion(settings.AzureOpenAIChatCompletion.DeploymentName, settings.AzureOpenAIChatCompletion.Endpoint, settings.AzureOpenAIChatCompletion.ApiKey, httpClient: httpClient)
-                .AddAzureOpenAITextEmbeddingGeneration(settings.AzureOpenAIEmbedding.DeploymentName, settings.AzureOpenAIChatCompletion.Endpoint, settings.AzureOpenAIChatCompletion.ApiKey, httpClient: httpClient);
-
-            List<IMcpClient> McpClients = new List<IMcpClient>();
-
-            foreach (var server in settings.MCPServers)
-            {
-                try
-                {
-                    ConfigureMcpClient(server, builder, McpClients);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error connecting to MCP server {server.Name}: {ex.Message}");
-                }
-            }
-
-            builder.Services.AddLogging(services => services.AddConsole().SetMinimumLevel(LogLevel.Trace));
-            return builder.Build();
         }
 
         private (ChatCompletionAgent sessionSummaryAgent, ChatCompletionAgent promptRewriteAgent) InitializeAgents()
@@ -165,6 +144,7 @@ namespace BlazorAIChat.Services
                 });
             }
 
+            logger.LogInformation("Kernel Memory initialized successfully.");
             return kernelMemoryBuilder.Build<MemoryServerless>();
         }
 
@@ -176,42 +156,52 @@ namespace BlazorAIChat.Services
         /// <param name="McpClients">The list of MCP clients.</param>
         private void ConfigureMcpClient(MCPServerConfig server, IKernelBuilder builder, List<IMcpClient> McpClients)
         {
-            IMcpClient mcpClient;
+            logger.LogDebug("Configuring MCP client for server: {ServerName}", server.Name);
+            try
+            {
+                IMcpClient mcpClient;
 
-            if (server.Type.ToLower() == "stdio")
-            {
-                mcpClient = McpClientFactory.CreateAsync(new StdioClientTransport(new()
+                if (server.Type.ToLower() == "stdio")
                 {
-                    Name = server.Name,
-                    Command = server.Endpoint,
-                    Arguments = server.Args,
-                    EnvironmentVariables = server.Env,
-                })).GetAwaiter().GetResult();
-            }
-            else if (server.Type.ToLower() == "sse")
-            {
-                var httpClient = new HttpClient();
-                foreach (var header in server.Headers)
+                    mcpClient = McpClientFactory.CreateAsync(new StdioClientTransport(new()
+                    {
+                        Name = server.Name,
+                        Command = server.Endpoint,
+                        Arguments = server.Args,
+                        EnvironmentVariables = server.Env,
+                    })).GetAwaiter().GetResult();
+                }
+                else if (server.Type.ToLower() == "sse")
                 {
-                    httpClient.DefaultRequestHeaders.Add(header.Key, header.Value);
+                    var httpClient = new HttpClient();
+                    foreach (var header in server.Headers)
+                    {
+                        httpClient.DefaultRequestHeaders.Add(header.Key, header.Value);
+                    }
+
+                    mcpClient = McpClientFactory.CreateAsync(new SseClientTransport(httpClient: httpClient, transportOptions: new SseClientTransportOptions()
+                    {
+                        Endpoint = new Uri($"{server.Endpoint}/sse")
+                    }), new McpClientOptions()
+                    {
+                        ClientInfo = new() { Name = server.Name, Version = server.Version }
+                    }).GetAwaiter().GetResult();
+                }
+                else
+                {
+                    throw new NotSupportedException($"Unsupported server type: {server.Type}");
                 }
 
-                mcpClient = McpClientFactory.CreateAsync(new SseClientTransport(httpClient: httpClient, transportOptions: new SseClientTransportOptions()
-                {
-                    Endpoint = new Uri($"{server.Endpoint}/sse")
-                }), new McpClientOptions()
-                {
-                    ClientInfo = new() { Name = server.Name, Version = server.Version }
-                }).GetAwaiter().GetResult();
+                IList<McpClientTool> tools = mcpClient.ListToolsAsync().GetAwaiter().GetResult();
+                builder.Plugins.AddFromFunctions($"{server.Name}", tools.Select(tool => tool.AsKernelFunction()));
+                McpClients.Add(mcpClient);
+                logger.LogInformation("MCP client configured successfully for server: {ServerName}", server.Name);
             }
-            else
+            catch (Exception ex)
             {
-                throw new NotSupportedException($"Unsupported server type: {server.Type}");
+                logger.LogError(ex, "Error configuring MCP client for server: {ServerName}", server.Name);
+                throw;
             }
-
-            IList<McpClientTool> tools = mcpClient.ListToolsAsync().GetAwaiter().GetResult();
-            builder.Plugins.AddFromFunctions($"{server.Name}", tools.Select(tool => tool.AsKernelFunction()));
-            McpClients.Add(mcpClient);
         }
 
         /// <summary>
@@ -258,6 +248,7 @@ namespace BlazorAIChat.Services
         /// <returns>An asynchronous enumerable of streaming chat message content.</returns>
         public async Task<IAsyncEnumerable<List<StreamingChatMessageContent>>> GetChatResponseAsync(string prompt, Message message, Session currentSession, User currentUser)
         {
+            logger.LogInformation("Getting chat response for session: {SessionId}, user: {UserId}", currentSession.SessionId, currentUser.Id);
             ArgumentNullException.ThrowIfNull(chatCompletionTokenizer);
             ArgumentNullException.ThrowIfNull(chatCompletionService);
 
@@ -279,6 +270,7 @@ namespace BlazorAIChat.Services
             streamingMessages = chatCompletionService.GetStreamingChatMessageContentsAsync(history, executionSettings, kernel);
  
             // Buffer and yield messages in chunks
+            logger.LogInformation("Chat response generation completed for session: {SessionId}", currentSession.SessionId);
             return BufferMessagesInChunks(streamingMessages, settings.AzureOpenAIChatCompletion.ResponseChunkSize);
         }
 
@@ -314,6 +306,7 @@ namespace BlazorAIChat.Services
         /// <param name="currentUser">The current user.</param>
         private async Task DoRAG(string prompt, Message message, Session currentSession, User currentUser)
         {
+            logger.LogInformation("Performing RAG for session: {SessionId}, user: {UserId}", currentSession.SessionId, currentUser.Id);
             var urls = StringUtils.GetURLsFromString(prompt);
             SearchResult? searchData = null;
             if (urls.Count > 0)
@@ -358,6 +351,7 @@ namespace BlazorAIChat.Services
 
             // Add the original prompt to the chat history
             history.AddUserMessage(prompt);
+            logger.LogInformation("RAG completed for session: {SessionId}", currentSession.SessionId);
         }
 
         /// <summary>
@@ -397,6 +391,7 @@ namespace BlazorAIChat.Services
         /// <returns>The summarized session name.</returns>
         public async Task<string> SummarizeChatSessionNameAsync(string? sessionId)
         {
+            logger.LogInformation("Summarizing chat session name for session: {SessionId}", sessionId);
             ArgumentNullException.ThrowIfNull(sessionId);
             ArgumentNullException.ThrowIfNull(chatCompletionService);
 
@@ -430,6 +425,7 @@ namespace BlazorAIChat.Services
             var session = await chatHistoryService.GetSessionAsync(sessionId).ConfigureAwait(false);
             session.Name = completionText;
             await chatHistoryService.UpdateSessionAsync(session).ConfigureAwait(false);
+            logger.LogInformation("Chat session name summarized for session: {SessionId}", sessionId);
             return completionText;
         }
 
@@ -443,6 +439,7 @@ namespace BlazorAIChat.Services
         /// <returns>A boolean indicating whether the document was processed successfully.</returns>
         public async Task<bool> ProcessDocsWithKernelMemory(MemoryStream memoryStream, string filename, Session currentSession, User currentUser)
         {
+            logger.LogInformation("Processing document: {Filename} for session: {SessionId}, user: {UserId}", filename, currentSession.SessionId, currentUser.Id);
             ArgumentNullException.ThrowIfNull(kernelMemory);
 
             // Check if the document already exists in the database
@@ -470,6 +467,7 @@ namespace BlazorAIChat.Services
                 await Task.Delay(1000).ConfigureAwait(false);
             }
 
+            logger.LogInformation("Document processed successfully: {Filename} for session: {SessionId}", filename, currentSession.SessionId);
             return true;
         }
 
@@ -480,6 +478,7 @@ namespace BlazorAIChat.Services
         /// <returns>A boolean indicating whether the documents were deleted successfully.</returns>
         public async Task<bool> DeleteUploadedDocs(string? sessionIdToDelete)
         {
+            logger.LogInformation("Deleting uploaded documents for session: {SessionId}", sessionIdToDelete);
             if (!string.IsNullOrEmpty(sessionIdToDelete))
             {
                 if (kernelMemory != null)
@@ -490,6 +489,7 @@ namespace BlazorAIChat.Services
                 dbContext.SessionDocuments.RemoveRange(docs);
                 await dbContext.SaveChangesAsync().ConfigureAwait(false);
 
+                logger.LogInformation("Uploaded documents deleted for session: {SessionId}", sessionIdToDelete);
                 return true;
             }
             return false;
@@ -503,12 +503,14 @@ namespace BlazorAIChat.Services
         /// <returns>A boolean indicating whether the image was added successfully.</returns>
         public bool AddImageToChat(MemoryStream imageStream, string uploadImageType)
         {
+            logger.LogInformation("Adding image to chat with type: {ImageType}", uploadImageType);
             var sendMessage = new ChatMessageContentItemCollection
             {
                 new ImageContent { Data = imageStream.ToArray(), MimeType = uploadImageType }
             };
             // Add the image to the chat history
             history.AddUserMessage(sendMessage);
+            logger.LogInformation("Image added to chat successfully.");
             return true;
         }
     }

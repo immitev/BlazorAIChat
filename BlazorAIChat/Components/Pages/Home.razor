@@ -258,8 +258,11 @@ else
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        isPageFullyLoaded = true;
-        await js.InvokeVoidAsync("scrollToBottom", "MessagesInChatdiv");
+        if (firstRender)
+        {
+            isPageFullyLoaded = true;
+            await js.InvokeVoidAsync("scrollToBottom", "MessagesInChatdiv");
+        }
     }
 
     private async Task FetchCurrentUserAsync()

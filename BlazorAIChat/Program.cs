@@ -1,3 +1,4 @@
+#pragma warning disable SKEXP0010, SKEXP0001, SKEXP0020, KMEXP00
 using BlazorAIChat;
 using BlazorAIChat.Authentication;
 using BlazorAIChat.Components;
@@ -7,8 +8,16 @@ using BlazorAIChat.Utils;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Microsoft.SemanticKernel;
+using ModelContextProtocol.Client;
+using ModelContextProtocol.Protocol.Transport;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Configure logging to default to the console
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
 
 builder.Services.Configure<AppSettings>(builder.Configuration);
 builder.Services.AddHttpClient("retryHttpClient").AddPolicyHandler(RetryHelper.GetRetryPolicy());
@@ -16,6 +25,70 @@ builder.Services.AddDbContext<AIChatDBContext>();
 builder.Services.AddScoped<UserService>();
 builder.Services.AddSingleton<ChatHistoryService>();
 builder.Services.AddScoped<AIService>();
+
+// Register SemanticKernel as a singleton and load MCP servers
+builder.Services.AddSingleton<Kernel>(serviceProvider =>
+{
+    var appSettings = serviceProvider.GetRequiredService<IOptions<AppSettings>>().Value;
+    var httpClientFactory = serviceProvider.GetRequiredService<IHttpClientFactory>();
+    var logger = serviceProvider.GetRequiredService<ILogger<Program>>();
+
+    var httpClient = httpClientFactory.CreateClient("retryHttpClient");
+
+    var builder = Kernel.CreateBuilder()
+        .AddAzureOpenAIChatCompletion(appSettings.AzureOpenAIChatCompletion.DeploymentName, appSettings.AzureOpenAIChatCompletion.Endpoint, appSettings.AzureOpenAIChatCompletion.ApiKey, httpClient: httpClient)
+        .AddAzureOpenAITextEmbeddingGeneration(appSettings.AzureOpenAIEmbedding.DeploymentName, appSettings.AzureOpenAIChatCompletion.Endpoint, appSettings.AzureOpenAIChatCompletion.ApiKey, httpClient: httpClient);
+
+    foreach (var server in appSettings.MCPServers)
+    {
+        try
+        {
+            logger.LogInformation("Configuring MCP client for server: {ServerName}", server.Name);
+            IMcpClient mcpClient;
+
+            if (server.Type.ToLower() == "stdio")
+            {
+                mcpClient = McpClientFactory.CreateAsync(new StdioClientTransport(new()
+                {
+                    Name = server.Name,
+                    Command = server.Endpoint,
+                    Arguments = server.Args,
+                    EnvironmentVariables = server.Env,
+                })).GetAwaiter().GetResult();
+            }
+            else if (server.Type.ToLower() == "sse")
+            {
+                var httpMcpClient = new HttpClient();
+                foreach (var header in server.Headers)
+                {
+                    httpMcpClient.DefaultRequestHeaders.Add(header.Key, header.Value);
+                }
+
+                mcpClient = McpClientFactory.CreateAsync(new SseClientTransport(httpClient: httpMcpClient, transportOptions: new SseClientTransportOptions()
+                {
+                    Endpoint = new Uri($"{server.Endpoint}/sse")
+                }), new McpClientOptions()
+                {
+                    ClientInfo = new() { Name = server.Name, Version = server.Version }
+                }).GetAwaiter().GetResult();
+            }
+            else
+            {
+                throw new NotSupportedException($"Unsupported server type: {server.Type}");
+            }
+
+            IList<McpClientTool> tools = mcpClient.ListToolsAsync().GetAwaiter().GetResult();
+            builder.Plugins.AddFromFunctions($"{server.Name}", tools.Select(tool => tool.AsKernelFunction()));
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, $"Error connecting to MCP server {server.Name}: {ex.Message}");
+        }
+    }
+
+    builder.Services.AddLogging(services => services.AddConsole().SetMinimumLevel(LogLevel.Trace));
+    return builder.Build();
+});
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
