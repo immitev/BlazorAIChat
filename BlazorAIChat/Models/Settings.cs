@@ -23,7 +23,8 @@
     {
         public string Endpoint { get; set; } = string.Empty;
         public string ApiKey { get; set; } = string.Empty;
-        public string Model { get; set; } = string.Empty;
+        public string DeploymentName { get; set; } = string.Empty;
+        public string Tokenizer { get; set; } = string.Empty;
         public int MaxInputTokens { get; set; } = 128000;
         public bool SupportsImages { get; set; } = false;
         public int ResponseChunkSize { get; set; } = 50;
@@ -31,7 +32,8 @@
 
     public class AzureOpenAIEmbeddingSettings
     {
-        public string Model { get; set; } = string.Empty;
+        public string DeploymentName { get; set; } = string.Empty;
+        public string Tokenizer { get; set; } = string.Empty;
         public int MaxInputTokens { get; set; } = 8192;
     }
 

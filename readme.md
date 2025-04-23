@@ -57,12 +57,16 @@ The appsettings.json file has a few configuration parameters that must be set fo
   "AzureOpenAIChatCompletion": {
     "Endpoint": "",
     "ApiKey": "",
-    "Model": "",
+    "Deployment": "",
+    "Tokenizer": "",
+    "MaxInputTokens": 128000
     "SupportsImages": false,
     "ResponseChunkSize": 40
   },
   "AzureOpenAIEmbedding": {
-    "Model": ""
+    "Deployment": "",
+    "Tokenizer": "",
+    "MaxInputTokens": 8192
   },
   "RequireEasyAuth": true,
   "SystemMessage" : "You are a helpful AI assistant. Respond in a friendly and professional tone.",
@@ -99,11 +103,15 @@ The appsettings.json file has a few configuration parameters that must be set fo
 
 - **AzureOpenAIChatCompletion Configuration**: 
   - Include your Azure OpenAI endpoint URL, API Key, and the name of the deployed chat model you intend to use.
+  - Specify the tokenizer to use. Generally this is the model name (not deployment name)
+  - Specify the maximum input tokens the selected model supports
   - If the model supports images, set `SupportsImages` to `true`.
   - ResponseChunkSize defines the number of response chunks from the Azure OpenAI service that need to be received before the UI is updated. The higher the number, the less UI updates are required, which improves the Blazor app performance.
 
 - **AzureOpenAIEmbedding Configuration**: 
   - Specify the deployed embedding model you plan to use.
+  - Specify the tokenizer to use. Generally this is the model name (not deployment name)
+  - Specify the maximum input tokens the selected model supports
   - Both the chat and embedding models are assumed to be accessed through the same Azure OpenAI endpoint and API key.
 
 - **PostgreSQL (optional)**:

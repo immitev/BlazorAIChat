@@ -26,7 +26,8 @@ namespace BlazorAIChat.Services
         private readonly Kernel kernel;
         private readonly MemoryServerless? kernelMemory;
         private readonly HttpClient? httpClient;
-        private readonly ITextTokenizer? textTokenizer;
+        private readonly ITextTokenizer? chatCompletionTokenizer;
+        private readonly ITextTokenizer? embeddingTokenizer;
         private readonly IChatCompletionService? chatCompletionService;
         private readonly ITextEmbeddingGenerationService? textEmbeddingGenerationService;
         public ChatHistory history { get; private set; } = new ChatHistory();
@@ -49,7 +50,8 @@ namespace BlazorAIChat.Services
 
             settings = appSettings.Value;
             httpClient = httpClientFactory.CreateClient("retryHttpClient");
-            textTokenizer = new GPT4Tokenizer();
+            chatCompletionTokenizer = TokenizerFactory.GetTokenizerForModel(settings.AzureOpenAIChatCompletion.Tokenizer);
+            embeddingTokenizer = TokenizerFactory.GetTokenizerForModel(settings.AzureOpenAIEmbedding.Tokenizer);
 
             // Initialize Kernel and related components
             kernel = InitializeKernel();
@@ -66,8 +68,8 @@ namespace BlazorAIChat.Services
         private Kernel InitializeKernel()
         {
             var builder = Kernel.CreateBuilder()
-                .AddAzureOpenAIChatCompletion(settings.AzureOpenAIChatCompletion.Model, settings.AzureOpenAIChatCompletion.Endpoint, settings.AzureOpenAIChatCompletion.ApiKey, httpClient: httpClient)
-                .AddAzureOpenAITextEmbeddingGeneration(settings.AzureOpenAIEmbedding.Model, settings.AzureOpenAIChatCompletion.Endpoint, settings.AzureOpenAIChatCompletion.ApiKey, httpClient: httpClient);
+                .AddAzureOpenAIChatCompletion(settings.AzureOpenAIChatCompletion.DeploymentName, settings.AzureOpenAIChatCompletion.Endpoint, settings.AzureOpenAIChatCompletion.ApiKey, httpClient: httpClient)
+                .AddAzureOpenAITextEmbeddingGeneration(settings.AzureOpenAIEmbedding.DeploymentName, settings.AzureOpenAIChatCompletion.Endpoint, settings.AzureOpenAIChatCompletion.ApiKey, httpClient: httpClient);
 
             List<IMcpClient> McpClients = new List<IMcpClient>();
 
@@ -126,8 +128,8 @@ namespace BlazorAIChat.Services
             ArgumentNullException.ThrowIfNull(textEmbeddingGenerationService);
 
             var kernelMemoryBuilder = new KernelMemoryBuilder()
-                .WithSemanticKernelTextEmbeddingGenerationService(textEmbeddingGenerationService, new Microsoft.KernelMemory.SemanticKernel.SemanticKernelConfig() { MaxTokenTotal = settings.AzureOpenAIEmbedding.MaxInputTokens })
-                .WithAzureOpenAITextGeneration(new AzureOpenAIConfig() { Auth = AzureOpenAIConfig.AuthTypes.APIKey, APIKey = settings.AzureOpenAIChatCompletion.ApiKey, Deployment = settings.AzureOpenAIChatCompletion.Model, Endpoint = settings.AzureOpenAIChatCompletion.Endpoint }, null, httpClient);
+                .WithSemanticKernelTextEmbeddingGenerationService(textEmbeddingGenerationService, new Microsoft.KernelMemory.SemanticKernel.SemanticKernelConfig() { MaxTokenTotal = settings.AzureOpenAIEmbedding.MaxInputTokens },embeddingTokenizer)
+                .WithAzureOpenAITextGeneration(new AzureOpenAIConfig() { Auth = AzureOpenAIConfig.AuthTypes.APIKey, APIKey = settings.AzureOpenAIChatCompletion.ApiKey, Deployment = settings.AzureOpenAIChatCompletion.DeploymentName, Endpoint = settings.AzureOpenAIChatCompletion.Endpoint }, chatCompletionTokenizer, httpClient);
 
             if (settings.UsesAzureAISearch)
             {
@@ -256,14 +258,14 @@ namespace BlazorAIChat.Services
         /// <returns>An asynchronous enumerable of streaming chat message content.</returns>
         public async Task<IAsyncEnumerable<List<StreamingChatMessageContent>>> GetChatResponseAsync(string prompt, Message message, Session currentSession, User currentUser)
         {
-            ArgumentNullException.ThrowIfNull(textTokenizer);
+            ArgumentNullException.ThrowIfNull(chatCompletionTokenizer);
             ArgumentNullException.ThrowIfNull(chatCompletionService);
 
             // Perform Retrieval-Augmented Generation (RAG) on the prompt
             await DoRAG(prompt, message, currentSession, currentUser).ConfigureAwait(false);
 
             // Clean up the chat history to fit within the token limit
-            history = AIUtils.CleanUpHistory(history, textTokenizer, settings.AzureOpenAIChatCompletion.MaxInputTokens);
+            history = AIUtils.CleanUpHistory(history, chatCompletionTokenizer, settings.AzureOpenAIChatCompletion.MaxInputTokens);
 
             IAsyncEnumerable<StreamingChatMessageContent> streamingMessages;
 
