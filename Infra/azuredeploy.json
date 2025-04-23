@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.29.47.4906",
-      "templateHash": "15763934296392086796"
+      "version": "0.34.44.8038",
+      "templateHash": "2715206327547841550"
     }
   },
   "parameters": {
@@ -55,7 +55,7 @@
     },
     "aiEmbedModelName": {
       "type": "string",
-      "defaultValue": "text-embedding-ada-002"
+      "defaultValue": "text-embedding-3-small"
     },
     "aiEmbedModelVersion": {
       "type": "string",
@@ -111,7 +111,11 @@
               "value": "[listKeys(resourceId('Microsoft.CognitiveServices/accounts', parameters('openAiServiceName')), '2021-04-30').key1]"
             },
             {
-              "name": "AzureOpenAIChatCompletion__Model",
+              "name": "AzureOpenAIChatCompletion__DeploymentName",
+              "value": "[toLower(format('{0}', parameters('aiChatModelName')))]"
+            },
+            {
+              "name": "AzureOpenAIChatCompletion__Tokenizer",
               "value": "[toLower(format('{0}', parameters('aiChatModelName')))]"
             },
             {
@@ -123,7 +127,11 @@
               "value": "[if(parameters('aiChatModelSupportsImages'), 'true', 'false')]"
             },
             {
-              "name": "AzureOpenAIEmbedding__Model",
+              "name": "AzureOpenAIEmbedding__DeploymentName",
+              "value": "[toLower(format('{0}', parameters('aiEmbedModelName')))]"
+            },
+            {
+              "name": "AzureOpenAIEmbedding__Tokenizer",
               "value": "[toLower(format('{0}', parameters('aiEmbedModelName')))]"
             },
             {

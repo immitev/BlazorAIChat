@@ -9,7 +9,7 @@ param aiChatModelName string = 'gpt-4o'
 param aiChatModelVersion string = '2024-05-13'
 param aiChatModelCapacity int = 80
 param aiChatModelSupportsImages bool = true
-param aiEmbedModelName string = 'text-embedding-ada-002'
+param aiEmbedModelName string = 'text-embedding-3-small'
 param aiEmbedModelVersion string = '2'
 param aiEmbedModelCapacity int = 120
 param requireEasyAuth bool = true
@@ -51,7 +51,11 @@ resource appService 'Microsoft.Web/sites@2020-06-01' = {
           value: openAiService.listKeys().key1
         }
         {
-          name: 'AzureOpenAIChatCompletion__Model'
+          name: 'AzureOpenAIChatCompletion__DeploymentName'
+          value: toLower('${aiChatModelName}')
+        }
+        {
+          name: 'AzureOpenAIChatCompletion__Tokenizer'
           value: toLower('${aiChatModelName}')
         }
         {
@@ -63,7 +67,11 @@ resource appService 'Microsoft.Web/sites@2020-06-01' = {
           value: aiChatModelSupportsImages ? 'true' : 'false'
         }
         {
-          name: 'AzureOpenAIEmbedding__Model'
+          name: 'AzureOpenAIEmbedding__DeploymentName'
+          value: toLower('${aiEmbedModelName}')
+        }
+        {
+          name: 'AzureOpenAIEmbedding__Tokenizer'
           value: toLower('${aiEmbedModelName}')
         }
         {
