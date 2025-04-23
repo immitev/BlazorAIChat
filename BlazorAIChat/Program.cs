@@ -58,15 +58,10 @@ builder.Services.AddSingleton<Kernel>(serviceProvider =>
             }
             else if (server.Type.ToLower() == "sse")
             {
-                var httpMcpClient = new HttpClient();
-                foreach (var header in server.Headers)
+                mcpClient = McpClientFactory.CreateAsync(new SseClientTransport(httpClient: httpClient, transportOptions: new SseClientTransportOptions()
                 {
-                    httpMcpClient.DefaultRequestHeaders.Add(header.Key, header.Value);
-                }
-
-                mcpClient = McpClientFactory.CreateAsync(new SseClientTransport(httpClient: httpMcpClient, transportOptions: new SseClientTransportOptions()
-                {
-                    Endpoint = new Uri($"{server.Endpoint}/sse")
+                    Endpoint = new Uri(server.Endpoint),
+                    AdditionalHeaders = server.Headers
                 }), new McpClientOptions()
                 {
                     ClientInfo = new() { Name = server.Name, Version = server.Version }
