@@ -18,7 +18,11 @@ namespace BlazorAIChat.Utils
             var jpeg2 = new byte[] { 255, 216, 255, 225 }; // jpeg canon
 
             var buffer = new byte[4];
-            stream.Read(buffer, 0, buffer.Length);
+            int bytesRead = stream.Read(buffer, 0, buffer.Length);
+            if (bytesRead < buffer.Length)
+            {
+                throw new InvalidOperationException("Failed to read the expected number of bytes from the stream.");
+            }
 
             stream.Position = 0;
 
@@ -81,7 +85,7 @@ namespace BlazorAIChat.Utils
             }
         }
 
-        public static async Task<MemoryStream>? GetDocStreamFromURLAsync(string url)
+        public static async Task<MemoryStream?> GetDocStreamFromURLAsync(string url)
         {
             // Get the contents from the URL.  If it is not text or html, return a memory stream of the contents, else return null.
             using (var httpClient = new HttpClient())

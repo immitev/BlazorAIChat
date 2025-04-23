@@ -225,7 +225,10 @@ else
 
     //File upload properties
     private IBrowserFile? selectedFile = null;
+#pragma warning disable CS0649 // This is done because the compiler doesn't see that the InputFileRef is set in the ChatInput component
     private InputFile? inputFile;
+#pragma warning restore CS0649
+
     const long maxFileSizeBytes = 1073741824; // 1GB
 
     //Properties for image processing

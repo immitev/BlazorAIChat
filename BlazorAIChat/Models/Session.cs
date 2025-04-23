@@ -32,6 +32,7 @@ namespace BlazorAIChat.Models
             Name = Constants.NEW_CHAT;
             UserId = string.Empty;
             SessionCreatedAt = DateTime.UtcNow;
+            Documents = new List<SessionDocument>();
         }
     }
 }

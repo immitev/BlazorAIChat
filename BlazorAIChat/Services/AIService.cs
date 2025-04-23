@@ -1,6 +1,4 @@
-﻿#nullable enable
-
-using BlazorAIChat.Models;
+﻿using BlazorAIChat.Models;
 using BlazorAIChat.Utils;
 using Microsoft.Extensions.Options;
 using Microsoft.KernelMemory;
@@ -13,7 +11,6 @@ using Microsoft.SemanticKernel.Connectors.OpenAI;
 using Microsoft.SemanticKernel.Embeddings;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol.Transport;
-using System.Configuration;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -54,13 +51,26 @@ namespace BlazorAIChat.Services
             httpClient = httpClientFactory.CreateClient("retryHttpClient");
             textTokenizer = new GPT4Tokenizer();
 
+            // Initialize Kernel and related components
+            kernel = InitializeKernel();
+            chatCompletionService = kernel.GetRequiredService<IChatCompletionService>();
+            textEmbeddingGenerationService = kernel.GetRequiredService<ITextEmbeddingGenerationService>();
+
+            // Initialize agents
+            (sessionSummaryAgent, promptRewriteAgent) = InitializeAgents();
+
+            // Initialize Kernel Memory
+            kernelMemory = InitializeKernelMemory();
+        }
+
+        private Kernel InitializeKernel()
+        {
             var builder = Kernel.CreateBuilder()
                 .AddAzureOpenAIChatCompletion(settings.AzureOpenAIChatCompletion.Model, settings.AzureOpenAIChatCompletion.Endpoint, settings.AzureOpenAIChatCompletion.ApiKey, httpClient: httpClient)
                 .AddAzureOpenAITextEmbeddingGeneration(settings.AzureOpenAIEmbedding.Model, settings.AzureOpenAIChatCompletion.Endpoint, settings.AzureOpenAIChatCompletion.ApiKey, httpClient: httpClient);
 
             List<IMcpClient> McpClients = new List<IMcpClient>();
 
-            // Unified loop for handling MCP servers
             foreach (var server in settings.MCPServers)
             {
                 try
@@ -74,10 +84,12 @@ namespace BlazorAIChat.Services
             }
 
             builder.Services.AddLogging(services => services.AddConsole().SetMinimumLevel(LogLevel.Trace));
-            kernel = builder.Build();
+            return builder.Build();
+        }
 
-            // Initialize the session summary agent with specific instructions
-            sessionSummaryAgent = new()
+        private (ChatCompletionAgent sessionSummaryAgent, ChatCompletionAgent promptRewriteAgent) InitializeAgents()
+        {
+            var sessionSummaryAgent = new ChatCompletionAgent
             {
                 Name = "SessionSummaryAgent",
                 Kernel = kernel,
@@ -92,7 +104,7 @@ namespace BlazorAIChat.Services
                     })
             };
 
-            promptRewriteAgent = new()
+            var promptRewriteAgent = new ChatCompletionAgent
             {
                 Name = "PromptRewriteAgent",
                 Kernel = kernel,
@@ -106,18 +118,17 @@ namespace BlazorAIChat.Services
                     })
             };
 
-            chatCompletionService = kernel.GetRequiredService<IChatCompletionService>();
-            textEmbeddingGenerationService = kernel.GetRequiredService<ITextEmbeddingGenerationService>();
+            return (sessionSummaryAgent, promptRewriteAgent);
+        }
 
-            var SimpleVectorDbDirectory = "KNN";
-            var SimpleFileStorageDirectory = "SFS";
+        private MemoryServerless? InitializeKernelMemory()
+        {
+            ArgumentNullException.ThrowIfNull(textEmbeddingGenerationService);
 
-            // Build kernel memory with various configurations based on settings
             var kernelMemoryBuilder = new KernelMemoryBuilder()
                 .WithSemanticKernelTextEmbeddingGenerationService(textEmbeddingGenerationService, new Microsoft.KernelMemory.SemanticKernel.SemanticKernelConfig() { MaxTokenTotal = settings.AzureOpenAIEmbedding.MaxInputTokens })
                 .WithAzureOpenAITextGeneration(new AzureOpenAIConfig() { Auth = AzureOpenAIConfig.AuthTypes.APIKey, APIKey = settings.AzureOpenAIChatCompletion.ApiKey, Deployment = settings.AzureOpenAIChatCompletion.Model, Endpoint = settings.AzureOpenAIChatCompletion.Endpoint }, null, httpClient);
 
-            // Configure kernel memory based on specific settings
             if (settings.UsesAzureAISearch)
             {
                 kernelMemoryBuilder = kernelMemoryBuilder.WithAzureAISearchMemoryDb(new AzureAISearchConfig()
@@ -127,7 +138,6 @@ namespace BlazorAIChat.Services
                     Auth = AzureAISearchConfig.AuthTypes.APIKey,
                     UseHybridSearch = false
                 });
-
             }
             else if (settings.UsesPostgreSQL)
             {
@@ -139,11 +149,10 @@ namespace BlazorAIChat.Services
             else
             {
                 kernelMemoryBuilder = kernelMemoryBuilder
-                    .WithSimpleVectorDb(new Microsoft.KernelMemory.MemoryStorage.DevTools.SimpleVectorDbConfig { StorageType = Microsoft.KernelMemory.FileSystem.DevTools.FileSystemTypes.Disk, Directory = SimpleVectorDbDirectory })
-                    .WithSimpleFileStorage(new Microsoft.KernelMemory.DocumentStorage.DevTools.SimpleFileStorageConfig() { StorageType = Microsoft.KernelMemory.FileSystem.DevTools.FileSystemTypes.Disk, Directory = SimpleFileStorageDirectory });
+                    .WithSimpleVectorDb(new Microsoft.KernelMemory.MemoryStorage.DevTools.SimpleVectorDbConfig { StorageType = Microsoft.KernelMemory.FileSystem.DevTools.FileSystemTypes.Disk, Directory = "KNN" })
+                    .WithSimpleFileStorage(new Microsoft.KernelMemory.DocumentStorage.DevTools.SimpleFileStorageConfig() { StorageType = Microsoft.KernelMemory.FileSystem.DevTools.FileSystemTypes.Disk, Directory = "SFS" });
             }
 
-            // Add Azure Document Intelligence if supported
             if (!settings.AzureOpenAIChatCompletion.SupportsImages && settings.UsesAzureDocIntelligence)
             {
                 kernelMemoryBuilder = kernelMemoryBuilder.WithAzureAIDocIntel(new AzureAIDocIntelConfig()
@@ -153,7 +162,8 @@ namespace BlazorAIChat.Services
                     Auth = AzureAIDocIntelConfig.AuthTypes.APIKey
                 });
             }
-            kernelMemory = kernelMemoryBuilder.Build<MemoryServerless>();
+
+            return kernelMemoryBuilder.Build<MemoryServerless>();
         }
 
         /// <summary>
