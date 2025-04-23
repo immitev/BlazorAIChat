@@ -15,7 +15,7 @@
     <PackageReference Include="Azure.Search.Documents" Version="11.6.0" />
     <PackageReference Include="Azure.Storage.Blobs" Version="12.24.0" />
     <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="9.0.4" />
-    <PackageReference Include="Microsoft.Azure.Cosmos" Version="3.48.1" />
+    <PackageReference Include="Microsoft.Azure.Cosmos" Version="3.49.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.4" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.4">
       <PrivateAssets>all</PrivateAssets>
@@ -29,17 +29,18 @@
     <PackageReference Include="Microsoft.KernelMemory.DataFormats.AzureAIDocIntel" Version="0.98.250324.1" />
     <PackageReference Include="Microsoft.KernelMemory.MemoryDb.AzureAISearch" Version="0.98.250324.1" />
     <PackageReference Include="Microsoft.KernelMemory.MemoryDb.Postgres" Version="0.98.250324.1" />
-    <PackageReference Include="Microsoft.SemanticKernel" Version="1.46.0" />
-    <PackageReference Include="Microsoft.SemanticKernel.Agents.Core" Version="1.46.0" />
-    <PackageReference Include="Microsoft.SemanticKernel.Connectors.AzureCosmosDBMongoDB" Version="1.17.1-alpha" />
-    <PackageReference Include="Microsoft.SemanticKernel.Connectors.Sqlite" Version="1.46.0-preview" />
-    <PackageReference Include="ModelContextProtocol" Version="0.1.0-preview.9" />
+    <PackageReference Include="Microsoft.SemanticKernel" Version="1.47.0" />
+    <PackageReference Include="Microsoft.SemanticKernel.Agents.Core" Version="1.47.0" />
+    <PackageReference Include="Microsoft.SemanticKernel.Connectors.AzureCosmosDBMongoDB" Version="1.47.0-preview" />
+    <PackageReference Include="Microsoft.SemanticKernel.Connectors.Sqlite" Version="1.47.0-preview" />
+    <PackageReference Include="ModelContextProtocol" Version="0.1.0-preview.10" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="System.IO.Packaging" Version="9.0.4" />
   </ItemGroup>
 
   <ItemGroup>
     <Folder Include="Migrations\" />
+    <Folder Include="SFS\" />
     <Folder Include="wwwroot\Images\" />
   </ItemGroup>
 
