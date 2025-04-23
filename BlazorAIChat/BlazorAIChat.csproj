@@ -47,7 +47,6 @@
 
   <ItemGroup>
     <Folder Include="Migrations\" />
-    <Folder Include="SFS\" />
     <Folder Include="wwwroot\Images\" />
   </ItemGroup>
 

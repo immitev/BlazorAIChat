@@ -54,50 +54,18 @@ namespace BlazorAIChat.Services
             httpClient = httpClientFactory.CreateClient("retryHttpClient");
             textTokenizer = new GPT4Tokenizer();
 
-            // Create a Kernel builder and add Azure OpenAI services for chat completion and text embedding generation
             var builder = Kernel.CreateBuilder()
                 .AddAzureOpenAIChatCompletion(settings.AzureOpenAIChatCompletion.Model, settings.AzureOpenAIChatCompletion.Endpoint, settings.AzureOpenAIChatCompletion.ApiKey, httpClient: httpClient)
                 .AddAzureOpenAITextEmbeddingGeneration(settings.AzureOpenAIEmbedding.Model, settings.AzureOpenAIChatCompletion.Endpoint, settings.AzureOpenAIChatCompletion.ApiKey, httpClient: httpClient);
 
-            //Add configured MCP Servers
             List<IMcpClient> McpClients = new List<IMcpClient>();
 
-            //handle STDIO servers
-            foreach (var server in settings.MCPServers.Where(x=>x.Type.ToLower()=="stdio"))
-            {
-                IMcpClient localMCPClient = McpClientFactory.CreateAsync(new StdioClientTransport(new()
-                {
-                    Name = server.Name,
-                    // Point the client to the MCPServer server executable
-                    Command = server.Endpoint,
-                    Arguments = server.Args,
-                    EnvironmentVariables = server.Env,
-                })).GetAwaiter().GetResult();
-
-                IList<McpClientTool> localTools = localMCPClient.ListToolsAsync().GetAwaiter().GetResult();
-                builder.Plugins.AddFromFunctions($"{server.Name}", localTools.Select(mcpClientTool => mcpClientTool.AsKernelFunction()));
-                McpClients.Add(localMCPClient);
-            }
-
-            //handle SSE servers
-            foreach (var server in settings.MCPServers.Where(x=>x.Type.ToLower()=="sse"))
+            // Unified loop for handling MCP servers
+            foreach (var server in settings.MCPServers)
             {
                 try
                 {
-                    //Configure HTTP Headers
-                    HttpClient httpClient = new HttpClient();
-                    if (server.Headers.Count>0)
-                    {
-                        foreach (var header in server.Headers)
-                        {
-                            httpClient.DefaultRequestHeaders.Add(header.Key, header.Value);
-                        }
-                    }
-
-                    IMcpClient remoteMcpClient = McpClientFactory.CreateAsync(new SseClientTransport(httpClient: httpClient, transportOptions: new SseClientTransportOptions() { Endpoint = new Uri($"{server.Endpoint}/sse") }), new McpClientOptions() { ClientInfo = new() { Name = server.Name, Version = server.Version } }).GetAwaiter().GetResult();
-                    IList<McpClientTool> remoteTools = remoteMcpClient.ListToolsAsync().GetAwaiter().GetResult();
-                    builder.Plugins.AddFromFunctions($"{server.Name}", remoteTools.Select(mcpClientTool => mcpClientTool.AsKernelFunction()));
-                    McpClients.Add(remoteMcpClient);
+                    ConfigureMcpClient(server, builder, McpClients);
                 }
                 catch (Exception ex)
                 {
@@ -105,9 +73,7 @@ namespace BlazorAIChat.Services
                 }
             }
 
-            // Add logging services
             builder.Services.AddLogging(services => services.AddConsole().SetMinimumLevel(LogLevel.Trace));
-
             kernel = builder.Build();
 
             // Initialize the session summary agent with specific instructions
@@ -139,8 +105,6 @@ namespace BlazorAIChat.Services
                         Temperature = 0.3f
                     })
             };
-
-
 
             chatCompletionService = kernel.GetRequiredService<IChatCompletionService>();
             textEmbeddingGenerationService = kernel.GetRequiredService<ITextEmbeddingGenerationService>();
@@ -176,7 +140,7 @@ namespace BlazorAIChat.Services
             {
                 kernelMemoryBuilder = kernelMemoryBuilder
                     .WithSimpleVectorDb(new Microsoft.KernelMemory.MemoryStorage.DevTools.SimpleVectorDbConfig { StorageType = Microsoft.KernelMemory.FileSystem.DevTools.FileSystemTypes.Disk, Directory = SimpleVectorDbDirectory })
-                    .WithSimpleFileStorage(new Microsoft.KernelMemory.DocumentStorage.DevTools.SimpleFileStorageConfig() { StorageType = Microsoft.KernelMemory.FileSystem.DevTools.FileSystemTypes.Disk, Directory= SimpleFileStorageDirectory });
+                    .WithSimpleFileStorage(new Microsoft.KernelMemory.DocumentStorage.DevTools.SimpleFileStorageConfig() { StorageType = Microsoft.KernelMemory.FileSystem.DevTools.FileSystemTypes.Disk, Directory = SimpleFileStorageDirectory });
             }
 
             // Add Azure Document Intelligence if supported
@@ -190,6 +154,52 @@ namespace BlazorAIChat.Services
                 });
             }
             kernelMemory = kernelMemoryBuilder.Build<MemoryServerless>();
+        }
+
+        /// <summary>
+        /// Configures an MCP client based on the server configuration.
+        /// </summary>
+        /// <param name="server">The server configuration.</param>
+        /// <param name="builder">The kernel builder.</param>
+        /// <param name="McpClients">The list of MCP clients.</param>
+        private void ConfigureMcpClient(MCPServerConfig server, IKernelBuilder builder, List<IMcpClient> McpClients)
+        {
+            IMcpClient mcpClient;
+
+            if (server.Type.ToLower() == "stdio")
+            {
+                mcpClient = McpClientFactory.CreateAsync(new StdioClientTransport(new()
+                {
+                    Name = server.Name,
+                    Command = server.Endpoint,
+                    Arguments = server.Args,
+                    EnvironmentVariables = server.Env,
+                })).GetAwaiter().GetResult();
+            }
+            else if (server.Type.ToLower() == "sse")
+            {
+                var httpClient = new HttpClient();
+                foreach (var header in server.Headers)
+                {
+                    httpClient.DefaultRequestHeaders.Add(header.Key, header.Value);
+                }
+
+                mcpClient = McpClientFactory.CreateAsync(new SseClientTransport(httpClient: httpClient, transportOptions: new SseClientTransportOptions()
+                {
+                    Endpoint = new Uri($"{server.Endpoint}/sse")
+                }), new McpClientOptions()
+                {
+                    ClientInfo = new() { Name = server.Name, Version = server.Version }
+                }).GetAwaiter().GetResult();
+            }
+            else
+            {
+                throw new NotSupportedException($"Unsupported server type: {server.Type}");
+            }
+
+            IList<McpClientTool> tools = mcpClient.ListToolsAsync().GetAwaiter().GetResult();
+            builder.Plugins.AddFromFunctions($"{server.Name}", tools.Select(tool => tool.AsKernelFunction()));
+            McpClients.Add(mcpClient);
         }
 
         /// <summary>
