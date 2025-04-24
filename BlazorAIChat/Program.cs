@@ -39,6 +39,7 @@ builder.Services.AddSingleton<Kernel>(serviceProvider =>
         .AddAzureOpenAIChatCompletion(appSettings.AzureOpenAIChatCompletion.DeploymentName, appSettings.AzureOpenAIChatCompletion.Endpoint, appSettings.AzureOpenAIChatCompletion.ApiKey, httpClient: httpClient)
         .AddAzureOpenAITextEmbeddingGeneration(appSettings.AzureOpenAIEmbedding.DeploymentName, appSettings.AzureOpenAIChatCompletion.Endpoint, appSettings.AzureOpenAIChatCompletion.ApiKey, httpClient: httpClient);
 
+    List<IMcpClient> mcpClients = new List<IMcpClient>();
     foreach (var server in appSettings.MCPServers)
     {
         try
@@ -72,6 +73,7 @@ builder.Services.AddSingleton<Kernel>(serviceProvider =>
                 throw new NotSupportedException($"Unsupported server type: {server.Type}");
             }
 
+            mcpClients.Add(mcpClient);
             IList<McpClientTool> tools = mcpClient.ListToolsAsync().GetAwaiter().GetResult();
             builder.Plugins.AddFromFunctions($"{server.Name}", tools.Select(tool => tool.AsKernelFunction()));
         }
