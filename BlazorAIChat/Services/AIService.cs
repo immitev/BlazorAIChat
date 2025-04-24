@@ -149,62 +149,6 @@ namespace BlazorAIChat.Services
         }
 
         /// <summary>
-        /// Configures an MCP client based on the server configuration.
-        /// </summary>
-        /// <param name="server">The server configuration.</param>
-        /// <param name="builder">The kernel builder.</param>
-        /// <param name="McpClients">The list of MCP clients.</param>
-        private void ConfigureMcpClient(MCPServerConfig server, IKernelBuilder builder, List<IMcpClient> McpClients)
-        {
-            logger.LogDebug("Configuring MCP client for server: {ServerName}", server.Name);
-            try
-            {
-                IMcpClient mcpClient;
-
-                if (server.Type.ToLower() == "stdio")
-                {
-                    mcpClient = McpClientFactory.CreateAsync(new StdioClientTransport(new()
-                    {
-                        Name = server.Name,
-                        Command = server.Endpoint,
-                        Arguments = server.Args,
-                        EnvironmentVariables = server.Env,
-                    })).GetAwaiter().GetResult();
-                }
-                else if (server.Type.ToLower() == "sse")
-                {
-                    var httpClient = new HttpClient();
-                    foreach (var header in server.Headers)
-                    {
-                        httpClient.DefaultRequestHeaders.Add(header.Key, header.Value);
-                    }
-
-                    mcpClient = McpClientFactory.CreateAsync(new SseClientTransport(httpClient: httpClient, transportOptions: new SseClientTransportOptions()
-                    {
-                        Endpoint = new Uri($"{server.Endpoint}/sse")
-                    }), new McpClientOptions()
-                    {
-                        ClientInfo = new() { Name = server.Name, Version = server.Version }
-                    }).GetAwaiter().GetResult();
-                }
-                else
-                {
-                    throw new NotSupportedException($"Unsupported server type: {server.Type}");
-                }
-
-                IList<McpClientTool> tools = mcpClient.ListToolsAsync().GetAwaiter().GetResult();
-                builder.Plugins.AddFromFunctions($"{server.Name}", tools.Select(tool => tool.AsKernelFunction()));
-                McpClients.Add(mcpClient);
-                logger.LogInformation("MCP client configured successfully for server: {ServerName}", server.Name);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error configuring MCP client for server: {ServerName}", server.Name);
-                throw;
-            }
-        }
-
-        /// <summary>
         /// Processes a list of URLs with kernel memory.
         /// </summary>
         /// <param name="urls">The list of URLs to process.</param>
