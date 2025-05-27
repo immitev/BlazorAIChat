@@ -70,6 +70,6 @@
         public string Type { get; set; } = string.Empty;
         public List<string> Args { get; set; } = new List<string>();
         public Dictionary<string,string> Headers { get; set; } = new Dictionary<string, string>();
-        public Dictionary<string,string> Env { get; set; } = new Dictionary<string, string>();
+        public Dictionary<string,string?> Env { get; set; } = new Dictionary<string, string?>();
     }
 }

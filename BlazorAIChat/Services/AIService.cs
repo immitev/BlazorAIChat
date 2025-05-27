@@ -1,5 +1,6 @@
 ﻿using BlazorAIChat.Models;
 using BlazorAIChat.Utils;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using Microsoft.KernelMemory;
 using Microsoft.KernelMemory.AI;
@@ -10,7 +11,6 @@ using Microsoft.SemanticKernel.Connectors.AzureOpenAI;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
 using Microsoft.SemanticKernel.Embeddings;
 using ModelContextProtocol.Client;
-using ModelContextProtocol.Protocol.Transport;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -28,7 +28,7 @@ namespace BlazorAIChat.Services
         private readonly ITextTokenizer? chatCompletionTokenizer;
         private readonly ITextTokenizer? embeddingTokenizer;
         private readonly IChatCompletionService? chatCompletionService;
-        private readonly ITextEmbeddingGenerationService? textEmbeddingGenerationService;
+        private readonly IEmbeddingGenerator? textEmbeddingGenerationService;
         public ChatHistory history { get; private set; } = new ChatHistory();
         private readonly AIChatDBContext dbContext;
         private readonly ChatCompletionAgent sessionSummaryAgent;
@@ -59,7 +59,7 @@ namespace BlazorAIChat.Services
             logger.LogInformation("Initializing AIService with settings");
 
             chatCompletionService = kernel.GetRequiredService<IChatCompletionService>();
-            textEmbeddingGenerationService = kernel.GetRequiredService<ITextEmbeddingGenerationService>();
+            textEmbeddingGenerationService = kernel.GetRequiredService<IEmbeddingGenerator<string, Embedding<float>>>();
 
             // Initialize agents
             (sessionSummaryAgent, promptRewriteAgent) = InitializeAgents();
@@ -107,7 +107,7 @@ namespace BlazorAIChat.Services
             ArgumentNullException.ThrowIfNull(textEmbeddingGenerationService);
 
             var kernelMemoryBuilder = new KernelMemoryBuilder()
-                .WithSemanticKernelTextEmbeddingGenerationService(textEmbeddingGenerationService, new Microsoft.KernelMemory.SemanticKernel.SemanticKernelConfig() { MaxTokenTotal = settings.AzureOpenAIEmbedding.MaxInputTokens },embeddingTokenizer)
+                .WithAzureOpenAITextEmbeddingGeneration(new AzureOpenAIConfig() { Auth = AzureOpenAIConfig.AuthTypes.APIKey, APIKey = settings.AzureOpenAIChatCompletion.ApiKey, Deployment = settings.AzureOpenAIEmbedding.DeploymentName, Endpoint = settings.AzureOpenAIChatCompletion.Endpoint }, embeddingTokenizer, httpClient: httpClient)
                 .WithAzureOpenAITextGeneration(new AzureOpenAIConfig() { Auth = AzureOpenAIConfig.AuthTypes.APIKey, APIKey = settings.AzureOpenAIChatCompletion.ApiKey, Deployment = settings.AzureOpenAIChatCompletion.DeploymentName, Endpoint = settings.AzureOpenAIChatCompletion.Endpoint }, chatCompletionTokenizer, httpClient);
 
             if (settings.UsesAzureAISearch)
