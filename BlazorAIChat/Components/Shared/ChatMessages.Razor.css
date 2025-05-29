@@ -1,6 +1,4 @@
-﻿
-
-.chat-bubble {
+﻿.chat-bubble {
     background-color: #E6F8F1;
     padding: 16px 28px;
     -webkit-border-radius: 20px;
@@ -68,4 +66,20 @@
 
 .chat-assistant-message {
     background-color: #D3D3D3
+}
+
+.chat-timestamp {
+    margin-left: auto;
+    font-size: 0.95em;
+    color: #6c757d;
+    font-weight: 400;
+    padding-left: 12px;
+    align-self: center;
+    /* visually right-align in flex header */
+}
+
+.toast-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 }

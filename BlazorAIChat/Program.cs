@@ -19,23 +19,45 @@ builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 
 builder.Services.Configure<AppSettings>(builder.Configuration);
+
+// Register a default HttpClient for streaming/long-lived connections
+builder.Services.AddHttpClient("defaultHttpClient");
+
+//Register an HttpClient that has a retry policy handler. Used for Azure OpenAI calls.
 builder.Services.AddHttpClient("retryHttpClient").AddPolicyHandler(RetryHelper.GetRetryPolicy());
+
 builder.Services.AddDbContext<AIChatDBContext>();
 builder.Services.AddScoped<UserService>();
 builder.Services.AddSingleton<ChatHistoryService>();
 builder.Services.AddScoped<AIService>();
 
-// Register SemanticKernel as a singleton with only synchronous dependencies
-builder.Services.AddSingleton<Kernel>(serviceProvider =>
+builder.Services.AddSingleton<McpPluginProvider>();
+
+// Register the Kernel using DI, injecting the plugin collection from the provider
+builder.Services.AddTransient<Kernel>(serviceProvider =>
 {
     var appSettings = serviceProvider.GetRequiredService<IOptions<AppSettings>>().Value;
     var httpClientFactory = serviceProvider.GetRequiredService<IHttpClientFactory>();
     var httpClient = httpClientFactory.CreateClient("retryHttpClient");
+    var pluginProvider = serviceProvider.GetRequiredService<McpPluginProvider>();
 
     var kernelBuilder = Kernel.CreateBuilder()
-        .AddAzureOpenAIChatCompletion(appSettings.AzureOpenAIChatCompletion.DeploymentName, appSettings.AzureOpenAIChatCompletion.Endpoint, appSettings.AzureOpenAIChatCompletion.ApiKey, httpClient: httpClient)
-        .AddAzureOpenAIEmbeddingGenerator(appSettings.AzureOpenAIEmbedding.DeploymentName, appSettings.AzureOpenAIChatCompletion.Endpoint, appSettings.AzureOpenAIChatCompletion.ApiKey, httpClient: httpClient);
-    
+        .AddAzureOpenAIChatCompletion(
+            appSettings.AzureOpenAIChatCompletion.DeploymentName,
+            appSettings.AzureOpenAIChatCompletion.Endpoint,
+            appSettings.AzureOpenAIChatCompletion.ApiKey,
+            httpClient: httpClient)
+        .AddAzureOpenAIEmbeddingGenerator(
+            appSettings.AzureOpenAIEmbedding.DeploymentName,
+            appSettings.AzureOpenAIChatCompletion.Endpoint,
+            appSettings.AzureOpenAIChatCompletion.ApiKey,
+            httpClient: httpClient);
+
+    // Add each plugin individually using the correct method
+    foreach (var plugin in pluginProvider.Plugins)
+    {
+        kernelBuilder.Plugins.Add(plugin);
+    }
     kernelBuilder.Services.AddLogging(services => services.AddConsole().SetMinimumLevel(LogLevel.Trace));
     return kernelBuilder.Build();
 });
@@ -66,14 +88,12 @@ using (var scope = app.Services.CreateScope())
     var context = services.GetRequiredService<AIChatDBContext>();
     context.Database.Migrate();
 
-    // Configure MCP clients and tools asynchronously and inject into Kernel
-    var kernel = services.GetRequiredService<Kernel>();
+    // Initialize the plugin provider before the app runs
     var appSettings = services.GetRequiredService<IOptions<AppSettings>>().Value;
     var httpClientFactory = services.GetRequiredService<IHttpClientFactory>();
     var logger = services.GetRequiredService<ILogger<Program>>();
-    var httpClient = httpClientFactory.CreateClient("retryHttpClient");
-
-    await ConfigureMcpClientsAndToolsAsync(appSettings, httpClient, logger, kernel);
+    var pluginProvider = services.GetRequiredService<McpPluginProvider>();
+    await pluginProvider.InitializeAsync(appSettings, httpClientFactory, logger);
 }
 
 // Configure the HTTP request pipeline.
@@ -110,53 +130,3 @@ if (!Directory.Exists("SFS"))
 }
 
 app.Run();
-
-
-
-// This method configures the MCP clients and tools based on the provided app settings
-static async Task ConfigureMcpClientsAndToolsAsync(AppSettings appSettings, HttpClient httpClient, ILogger logger, Kernel kernel)
-{
-    foreach (var server in appSettings.MCPServers)
-    {
-        try
-        {
-            logger.LogInformation("Configuring MCP client for server: {ServerName}", server.Name);
-            IMcpClient mcpClient;
-
-            if (server.Type.ToLower() == "stdio")
-            {
-                mcpClient = await McpClientFactory.CreateAsync(new StdioClientTransport(new()
-                {
-                    Name = server.Name,
-                    Command = server.Endpoint,
-                    Arguments = server.Args,
-                    EnvironmentVariables = server.Env,
-                }));
-            }
-            else if (server.Type.ToLower() == "sse")
-            {
-                mcpClient = await McpClientFactory.CreateAsync(
-                    new SseClientTransport(httpClient: httpClient, transportOptions: new SseClientTransportOptions()
-                    {
-                        Endpoint = new Uri(server.Endpoint),
-                        AdditionalHeaders = server.Headers
-                    }),
-                    new McpClientOptions()
-                    {
-                        ClientInfo = new() { Name = server.Name, Version = server.Version }
-                    });
-            }
-            else
-            {
-                throw new NotSupportedException($"Unsupported server type: {server.Type}");
-            }
-
-            IList<McpClientTool> tools = await mcpClient.ListToolsAsync();
-            kernel.Plugins.AddFromFunctions($"{server.Name}", tools.Select(tool => tool.AsKernelFunction()));
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, $"Error connecting to MCP server {server.Name}: {ex.Message}");
-        }
-    }
-}

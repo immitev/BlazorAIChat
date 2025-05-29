@@ -8,6 +8,7 @@
             <div class="toast-header chat-user-message text-dark">
                 <i class="bi bi-person me-1" aria-hidden="true"></i>
                 <strong class="me-auto text-capitalize">User</strong>
+                <span class="chat-timestamp">@msg.TimeStamp.ToLocalTime().ToString("MM/dd/yyyy HH:mm:ss")</span>
             </div>
             <div class="toast-body">
                 @if (msg.Prompt.StartsWith("data:image"))
@@ -27,6 +28,7 @@
             <div class="toast-header chat-assistant-message text-dark">
                 <i class="bi bi-robot me-1" aria-hidden="true"></i>
                 <strong class="me-auto text-capitalize">Assistant</strong>
+                <span class="chat-timestamp">@msg.CompletionTimeStamp?.ToLocalTime().ToString("MM/dd/yyyy HH:mm:ss")</span>
             </div>
             <div class="toast-body">
                 @if(string.IsNullOrEmpty(msg.Completion.Trim()))

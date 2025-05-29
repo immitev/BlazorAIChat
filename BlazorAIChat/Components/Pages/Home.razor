@@ -400,6 +400,7 @@ else
 
                     }
                     message.Completion = markdownBuilder.ToString();
+                    message.CompletionTimeStamp = DateTime.UtcNow;
                     aiService.history.AddAssistantMessage(markdownBuilder.ToString());
 
                     //store the chat session history
