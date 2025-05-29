@@ -22,6 +22,8 @@ namespace BlazorAIChat.Models
 
         public string Completion { get; set; }
 
+        public DateTime? CompletionTimeStamp { get; set; }
+
         public List<string> Citations { get; set; }
 
         public Message(string sessionId, string prompt, string completion = "")
@@ -30,6 +32,7 @@ namespace BlazorAIChat.Models
             Type = nameof(Message);
             SessionId = sessionId;
             TimeStamp = DateTime.UtcNow;
+            CompletionTimeStamp = null;
             Prompt = prompt;
             Completion = completion;
             Citations = new List<string>();
