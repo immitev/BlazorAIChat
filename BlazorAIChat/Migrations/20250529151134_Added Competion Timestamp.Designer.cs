@@ -12,7 +12,7 @@ namespace BlazorAIChat.Migrations
 {
     [DbContext(typeof(AIChatDBContext))]
     [Migration("20250529151134_Added Competion Timestamp")]
-    partial class AddedCompetionTimestamp
+    partial class AddedCompletionTimestamp
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)

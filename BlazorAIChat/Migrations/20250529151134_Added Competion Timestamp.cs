@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace BlazorAIChat.Migrations
 {
     /// <inheritdoc />
-    public partial class AddedCompetionTimestamp : Migration
+    public partial class AddedCompletionTimestamp : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
