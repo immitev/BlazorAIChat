@@ -9,8 +9,6 @@ using Microsoft.SemanticKernel.Agents;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.AzureOpenAI;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
-using Microsoft.SemanticKernel.Embeddings;
-using ModelContextProtocol.Client;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -33,6 +31,7 @@ namespace BlazorAIChat.Services
         private readonly AIChatDBContext dbContext;
         private readonly ChatCompletionAgent sessionSummaryAgent;
         private readonly ChatCompletionAgent promptRewriteAgent;
+        private readonly ChatCompletionAgent ragDecisionAgent;
         private readonly ChatHistoryService chatHistoryService;
         private readonly ILogger<AIService> logger;
         private readonly Kernel kernel;
@@ -62,13 +61,13 @@ namespace BlazorAIChat.Services
             textEmbeddingGenerationService = kernel.GetRequiredService<IEmbeddingGenerator<string, Embedding<float>>>();
 
             // Initialize agents
-            (sessionSummaryAgent, promptRewriteAgent) = InitializeAgents();
+            (sessionSummaryAgent, promptRewriteAgent, ragDecisionAgent) = InitializeAgents();
 
             // Initialize Kernel Memory
             kernelMemory = InitializeKernelMemory();
         }
 
-        private (ChatCompletionAgent sessionSummaryAgent, ChatCompletionAgent promptRewriteAgent) InitializeAgents()
+        private (ChatCompletionAgent sessionSummaryAgent, ChatCompletionAgent promptRewriteAgent, ChatCompletionAgent ragDecisionAgent) InitializeAgents()
         {
             var sessionSummaryAgent = new ChatCompletionAgent
             {
@@ -99,7 +98,30 @@ namespace BlazorAIChat.Services
                     })
             };
 
-            return (sessionSummaryAgent, promptRewriteAgent);
+            var ragDecisionAgent = new ChatCompletionAgent
+            {
+                Name = "RAGDecisionAgent",
+                Kernel = kernel,
+                Instructions = $"""
+                    You are an AI assistant that determines whether a query requires knowledge retrieval.
+                    
+                    Analyze the user's query and respond with 'true' if the query likely needs to retrieve information from stored knowledge, or 'false' if the query can be answered using the available tools.
+                    If the query contains URLs, it should always return 'true'.
+                    If the query can be answered with both the tools and knowledge retrieval, it should return 'true'.
+                    If you are unsure, return 'true'.
+                                      
+                    Respond only with 'true' or 'false'.
+                """,
+                Arguments = new KernelArguments(
+                    new OpenAIPromptExecutionSettings()
+                    {
+                        Temperature = 0,
+                        MaxTokens = 10,
+                        ToolCallBehavior = ToolCallBehavior.EnableKernelFunctions
+                    })
+            };
+
+            return (sessionSummaryAgent, promptRewriteAgent, ragDecisionAgent);
         }
 
         private MemoryServerless? InitializeKernelMemory()
@@ -196,8 +218,19 @@ namespace BlazorAIChat.Services
             ArgumentNullException.ThrowIfNull(chatCompletionTokenizer);
             ArgumentNullException.ThrowIfNull(chatCompletionService);
 
-            // Perform Retrieval-Augmented Generation (RAG) on the prompt
-            await DoRAG(prompt, message, currentSession, currentUser).ConfigureAwait(false);
+            // Conditionally perform RAG only if needed
+            bool ragNeeded = await ShouldUseRAGForPrompt(prompt, currentSession.SessionId);
+            if (ragNeeded)
+            {
+                logger.LogInformation("RAG determined to be needed, performing document retrieval");
+                await DoRAG(prompt, message, currentSession, currentUser).ConfigureAwait(false);
+            }
+            else
+            {
+                logger.LogInformation("RAG determined not needed, proceeding with direct completion");
+                // Just add the prompt to history without RAG
+                history.AddUserMessage(prompt);
+            }
 
             // Clean up the chat history to fit within the token limit
             history = AIUtils.CleanUpHistory(history, chatCompletionTokenizer, settings.AzureOpenAIChatCompletion.MaxInputTokens);
@@ -212,10 +245,50 @@ namespace BlazorAIChat.Services
             };
 
             streamingMessages = chatCompletionService.GetStreamingChatMessageContentsAsync(history, executionSettings, kernel);
- 
+
             // Buffer and yield messages in chunks
             logger.LogInformation("Chat response generation completed for session: {SessionId}", currentSession.SessionId);
             return BufferMessagesInChunks(streamingMessages, settings.AzureOpenAIChatCompletion.ResponseChunkSize);
+        }
+
+        /// <summary>
+        /// Determines whether RAG should be used for the given prompt
+        /// </summary>
+        /// <param name="prompt">The user's prompt</param>
+        /// <param name="sessionId">The current session ID</param>
+        /// <returns>True if RAG should be used, false otherwise</returns>
+        private async Task<bool> ShouldUseRAGForPrompt(string prompt, string sessionId)
+        {
+            // Always use RAG if URLs are present in the prompt
+            if (StringUtils.GetURLsFromString(prompt).Count > 0)
+            {
+                return true;
+            }
+
+            // Check if there are any documents in this session
+            bool sessionHasDocuments = dbContext.SessionDocuments.Any(d => d.SessionId == sessionId);
+            if (!sessionHasDocuments)
+            {
+                // If no documents in session, don't bother with RAG
+                return false;
+            }
+
+            // Use ChatCompletionAgent to analyze if retrieval is needed
+            ChatHistory analysisHistory = new();
+            analysisHistory.AddUserMessage(prompt);
+            StringBuilder output = new();
+            Microsoft.SemanticKernel.Agents.AgentThread? agentThread = null;
+            await foreach (var response in ragDecisionAgent.InvokeAsync(analysisHistory, agentThread).ConfigureAwait(false))
+            {
+                output.Append(response.Message.ToString());
+                agentThread = response.Thread;
+            }
+            var completionText = output.ToString().Trim().ToLower();
+            if (agentThread is not null)
+            {
+                await agentThread.DeleteAsync();
+            }
+            return completionText.Contains("true");
         }
 
         private async IAsyncEnumerable<List<StreamingChatMessageContent>> BufferMessagesInChunks(IAsyncEnumerable<StreamingChatMessageContent> streamingMessages, int chunkSize)
@@ -240,7 +313,6 @@ namespace BlazorAIChat.Services
             }
         }
 
-
         /// <summary>
         /// Performs Retrieval-Augmented Generation (RAG) on the given prompt.
         /// </summary>
@@ -262,19 +334,19 @@ namespace BlazorAIChat.Services
                 string messageToProcessNoURLS = await GenerateNewPromptForMessagesWithUrl(prompt).ConfigureAwait(false);
 
                 // Search the kernel memory with the new prompt
-                searchData = await kernelMemory!.SearchAsync(messageToProcessNoURLS, currentSession.Id).ConfigureAwait(false);
+                searchData = await kernelMemory!.SearchAsync(messageToProcessNoURLS, currentSession.Id, minRelevance: 0.5, limit: 5).ConfigureAwait(false);
             }
             else
             {
                 // Search the kernel memory with the original prompt
-                searchData = await kernelMemory!.SearchAsync(prompt, currentSession.Id).ConfigureAwait(false);
+                searchData = await kernelMemory!.SearchAsync(prompt, currentSession.Id, minRelevance: 0.5, limit: 5).ConfigureAwait(false);
             }
 
             if (searchData != null && !searchData.NoResult)
             {
                 if (searchData.Results.Count > 0)
                 {
-                    history.AddUserMessage("No matter what the question or request, base the response only on the information below.");
+                    history.AddUserMessage("Below are facts related to the question. Use supplied tools if required to fully answer the request without asking them for more information.");
                     foreach (var result in searchData.Results)
                     {
                         foreach (var p in result.Partitions)
@@ -312,7 +384,7 @@ namespace BlazorAIChat.Services
 
             Microsoft.SemanticKernel.Agents.AgentThread? agentThread = null;
             // Get the updated prompt from the prompt rewrite agent
-            await foreach (var response in promptRewriteAgent.InvokeAsync(sessionSummary,agentThread).ConfigureAwait(false))
+            await foreach (var response in promptRewriteAgent.InvokeAsync(sessionSummary, agentThread).ConfigureAwait(false))
             {
                 output.Append(response.Message.ToString());
                 agentThread = response.Thread;
@@ -345,7 +417,7 @@ namespace BlazorAIChat.Services
 
             //Strip base64 encoded content from the conversation text. We don't need to send all of that to the agent.
             string pattern = @"data:image\/[a-zA-Z]+;base64,[^\s]+";
-            conversationText =  Regex.Replace(conversationText, pattern, string.Empty);
+            conversationText = Regex.Replace(conversationText, pattern, string.Empty);
 
             // Create a chat history with the entire conversation
             ChatHistory sessionSummary = new() { new ChatMessageContent(AuthorRole.User, conversationText) };

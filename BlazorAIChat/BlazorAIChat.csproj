@@ -47,7 +47,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="KNN\" />
+    <Folder Include="Extensions\" />
     <Folder Include="Migrations\" />
     <Folder Include="wwwroot\Images\" />
   </ItemGroup>
