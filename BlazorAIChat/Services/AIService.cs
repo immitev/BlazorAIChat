@@ -105,9 +105,9 @@ namespace BlazorAIChat.Services
                 Name = "RAGDecisionAgent",
                 Kernel = kernel,
                 Instructions = $"""
-                    Based on the conversation so far, determines whether the question can be answered by tools alone.
+                    Determine whether the question can be answered by tools alone.
                     
-                    Analyze the conversation and respond with 'true' if the question likely needs to retrieve information from stored knowledge, or 'false' if the question can be answered using the available tools.
+                    Analyze the question and respond with 'true' if the question likely needs to retrieve information from stored knowledge, or 'false' if the question can be answered using the available tools.
                     If the question contains URLs, it should always return 'true'.
                     If the question can be answered with both the tools and knowledge retrieval, it should return 'true'.
                     If you are unsure, return 'true'
@@ -282,9 +282,7 @@ namespace BlazorAIChat.Services
 
             // Use ChatCompletionAgent to analyze if retrieval is needed
             ChatHistory analysisHistory = new();
-            foreach (var message in history)
-                analysisHistory.Add(new ChatMessageContent(message.Role, message.Content));
-        
+       
             analysisHistory.AddUserMessage(prompt);
             StringBuilder output = new();
             Microsoft.SemanticKernel.Agents.AgentThread? agentThread = null;
