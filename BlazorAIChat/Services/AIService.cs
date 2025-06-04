@@ -105,11 +105,11 @@ namespace BlazorAIChat.Services
                 Name = "RAGDecisionAgent",
                 Kernel = kernel,
                 Instructions = $"""
-                    You are an AI assistant that determines whether a query can be answered by tools alone.
+                    Based on the conversation so far, determines whether the question can be answered by tools alone.
                     
-                    Analyze the user's query and respond with 'true' if the query likely needs to retrieve information from stored knowledge, or 'false' if the query can be answered using the available tools.
-                    If the query contains URLs, it should always return 'true'.
-                    If the query can be answered with both the tools and knowledge retrieval, it should return 'true'.
+                    Analyze the conversation and respond with 'true' if the question likely needs to retrieve information from stored knowledge, or 'false' if the question can be answered using the available tools.
+                    If the question contains URLs, it should always return 'true'.
+                    If the question can be answered with both the tools and knowledge retrieval, it should return 'true'.
                     If you are unsure, return 'true'
                                       
                     Respond only with 'true' or 'false'.
@@ -272,16 +272,19 @@ namespace BlazorAIChat.Services
                 return true;
             }
 
-            // Check if there are any documents in this session
+            // Check if there are any documents in this session or if we are using shared knowledge store
             bool sessionHasDocuments = dbContext.SessionDocuments.Any(d => d.SessionId == sessionId);
-            if (!sessionHasDocuments)
+            if (!sessionHasDocuments && !settings.UsesAzureAISearchSharedKnowledge)
             {
-                // If no documents in session, don't bother with RAG
+                // If no documents in session, don't bother with RAG unless there is a central knowledge store configured.
                 return false;
             }
 
             // Use ChatCompletionAgent to analyze if retrieval is needed
             ChatHistory analysisHistory = new();
+            foreach (var message in history)
+                analysisHistory.Add(new ChatMessageContent(message.Role, message.Content));
+        
             analysisHistory.AddUserMessage(prompt);
             StringBuilder output = new();
             Microsoft.SemanticKernel.Agents.AgentThread? agentThread = null;

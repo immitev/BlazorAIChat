@@ -17,6 +17,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Configure logging to default to the console
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
+builder.Logging.SetMinimumLevel(LogLevel.Information);
 
 builder.Services.Configure<AppSettings>(builder.Configuration);
 

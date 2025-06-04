@@ -94,6 +94,11 @@ else
                                 <h6><span class="badge ai-service-badge ms-2">File Memory Storage</span></h6>
                             }
 
+                            @if (appSettings.Value.UsesAzureAISearchSharedKnowledge)
+                            {
+                                <h6><span class="badge ai-service-badge ms-2">Shared Knowledge Enabled</span></h6>
+                            }
+
                             @if (appSettings.Value.UsesAzureDocIntelligence)
                             {
                                 <h6><span class="badge ai-service-badge ms-2">Azure Doc Intelligence</span></h6>

@@ -110,7 +110,7 @@ True if you want AI to determine if it should skip using RAG and use configured 
 False if you want the chat to always use RAG with tools
 
 - **AzureOpenAIChatCompletion Configuration**: 
-  - Include your Azure OpenAI endpoint URL, API Key, and the name of the deployed chat model you intend to use.
+  - Include your Azure OpenAI endpoint URL, API Key, and the name of the deployed chat model you intend to use. If you plan to use Azure AI Search shared knowledge base then you must ensure the endpoint is for the openai.azure.com domain. This can be configured by clicking the Generate Custom Domain Name in networking section of the Azure Open AI Service.
   - Specify the tokenizer to use. Generally this is the model name (not deployment name)
   - Specify the maximum input tokens the selected model supports
   - If the model supports images, set `SupportsImages` to `true`.

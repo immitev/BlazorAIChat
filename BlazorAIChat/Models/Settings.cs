@@ -15,9 +15,14 @@
         public bool AIDeterminesRagUsage { get; set; } = true;
         public bool UsesPostgreSQL => !string.IsNullOrEmpty(ConnectionStrings.PostgreSQL);
         public bool UsesCosmosDb => !string.IsNullOrEmpty(ConnectionStrings.CosmosDb);
-        public bool UsesAzureAISearch => !string.IsNullOrEmpty(AzureAISearch.Endpoint) && !string.IsNullOrEmpty(AzureAISearch.ApiKey);
+        public bool UsesAzureAISearch => !string.IsNullOrEmpty(AzureAISearch.Endpoint) && !string.IsNullOrEmpty(AzureAISearch.ApiKey) && AzureAISearch.IndexPerChatSession;
         public bool UsesAzureDocIntelligence => !string.IsNullOrEmpty(DocumentIntelligence.Endpoint) && !string.IsNullOrEmpty(DocumentIntelligence.ApiKey);
 
+        public bool UsesAzureAISearchSharedKnowledge => !string.IsNullOrEmpty(AzureAISearch.Endpoint) &&
+            !string.IsNullOrEmpty(AzureAISearch.ApiKey) &&
+            !string.IsNullOrEmpty(AzureAISearch.SharedIndex) &&
+            !string.IsNullOrEmpty(AzureAISearch.SharedIndexAzureBlobStorageConnection) &&
+            !string.IsNullOrEmpty(AzureAISearch.SharedIndexAzureBlobStorageContainer);
     }
 
     public class AzureOpenAIChatCompletionSettings

@@ -27,16 +27,11 @@ namespace BlazorAIChat.Services
             this.logger = logger;
 
             //Check to see if we are configured to use AI Search
-            if (string.IsNullOrEmpty(settings.AzureAISearch.Endpoint) ||
-                string.IsNullOrEmpty(settings.AzureAISearch.ApiKey) ||
-                string.IsNullOrEmpty(settings.AzureAISearch.SharedIndex) ||
-                string.IsNullOrEmpty(settings.AzureAISearch.SharedIndexAzureBlobStorageConnection) ||
-                string.IsNullOrEmpty(settings.AzureAISearch.SharedIndexAzureBlobStorageContainer))
+            if (settings.UsesAzureAISearchSharedKnowledge==false)
             {
                 logger.LogInformation("Application not configured to use Azure AI Search for shared index");
                 return;
             }
-
 
             //configure clients
             azureOpenAIClient = new AzureOpenAIClient(new Uri(settings.AzureOpenAIChatCompletion.Endpoint), new AzureKeyCredential(settings.AzureOpenAIChatCompletion.ApiKey));
