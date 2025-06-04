@@ -54,6 +54,7 @@ Note: If deployed on an Azure App Service with EasyAuth enabled, the uploaded do
 The appsettings.json file has a few configuration parameters that must be set for the app to properly work:
 
   ```
+  "AIDeterminesRagUsage": false,
   "AzureOpenAIChatCompletion": {
     "Endpoint": "",
     "ApiKey": "",
@@ -80,7 +81,11 @@ The appsettings.json file has a few configuration parameters that must be set fo
 },
 "AzureAISearch": {
   "Endpoint": "",
-  "ApiKey": ""
+  "ApiKey": "",
+  "IndexPerChatSession": false,
+  "SharedIndex": "",
+  "SharedIndexAzureBlobStorageConnection": "",
+  "SharedIndexAzureBlobStorageContainer": ""
 },
 "MCPServers": [
   {
@@ -100,6 +105,9 @@ The appsettings.json file has a few configuration parameters that must be set fo
   }
 ]
 ```
+- **AIDeterminesRagUsage**
+True if you want AI to determine if it should skip using RAG and use configured tools instead for answering questions.
+False if you want the chat to always use RAG with tools
 
 - **AzureOpenAIChatCompletion Configuration**: 
   - Include your Azure OpenAI endpoint URL, API Key, and the name of the deployed chat model you intend to use.
@@ -121,7 +129,14 @@ If you would like to use PostgreSQL in place of files for knowledge storage, you
 You may choose to optionally manually deploy Azure Document Intelligence which can be used to OCR uploaded images. This is not needed or enabled if your AI model supports images.
 
 - **Azure AI Search (optional)**
-This is an optional knowledge store that if configured will replace both the file and PostreSQL storage.
+Enables the usage of Azure AI Search for a centralized knowledgebase using documents stored within an Azure Blob Storage account.
+This can also be configued to replace the file and PostgreSQL knowledge store for individual chat sessions.
+  - Endpoint: URI to the Azure AI Search Instance
+  - ApiKey: API Key for the Azure AI Search Instance
+  - IndexPerChatSession: If true it will replace the file or PostgreSQL knowledge store for individual chat sessions.
+  - SharedIndex: Name of the shared index to use for the centralized knowledgebase. Leave empty if you do not want a central knowledge store.
+  - SharedIndexAzureBlobStorageConnection: Connection string to the Azure Storage Account that holds the documents and information for the central knowledgebase.  Must be provided if SharedIndex has a value.
+  - SharedIndexAzureBlobStorageContainer: The name of the container in the Azure Storage Account that holds the knowledgebase content. This must be provided if SharedIndex has a value.
 
 - **EasyAuth Configuration**: 
   - If utilizing EasyAuth with Azure App Service, it is recommended to set `RequireEasyAuth` to `true` to ensure that users are fully authenticated and not recognized as guests. This setting is set to true by default.

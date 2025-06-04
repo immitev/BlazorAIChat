@@ -144,6 +144,7 @@ resource openAiService 'Microsoft.CognitiveServices/accounts@2021-04-30' = {
   properties: {
     apiProperties: {
       enableOpenAI: true
+      customSubDomainName: toLower('BlazorAIChat-${uniqueName}')
     }
   }
 

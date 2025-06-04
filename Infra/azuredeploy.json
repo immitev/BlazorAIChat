@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.34.44.8038",
-      "templateHash": "2715206327547841550"
+      "version": "0.36.1.42791",
+      "templateHash": "16469181266862007002"
     }
   },
   "parameters": {
@@ -202,7 +202,8 @@
       },
       "properties": {
         "apiProperties": {
-          "enableOpenAI": true
+          "enableOpenAI": true,
+          "customSubDomainName": "[toLower(format('BlazorAIChat-{0}', parameters('uniqueName')))]"
         }
       }
     },

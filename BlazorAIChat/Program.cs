@@ -30,6 +30,7 @@ builder.Services.AddDbContext<AIChatDBContext>();
 builder.Services.AddScoped<UserService>();
 builder.Services.AddSingleton<ChatHistoryService>();
 builder.Services.AddScoped<AIService>();
+builder.Services.AddSingleton<AISearchService>();
 
 builder.Services.AddSingleton<McpPluginProvider>();
 

@@ -12,6 +12,7 @@
         public DocumentIntelligenceSettings DocumentIntelligence { get; set; } = new DocumentIntelligenceSettings();
         public AzureAISearchSettings AzureAISearch { get; set; } = new AzureAISearchSettings();
         public List<MCPServerConfig> MCPServers { get; set; } = new List<MCPServerConfig>();
+        public bool AIDeterminesRagUsage { get; set; } = true;
         public bool UsesPostgreSQL => !string.IsNullOrEmpty(ConnectionStrings.PostgreSQL);
         public bool UsesCosmosDb => !string.IsNullOrEmpty(ConnectionStrings.CosmosDb);
         public bool UsesAzureAISearch => !string.IsNullOrEmpty(AzureAISearch.Endpoint) && !string.IsNullOrEmpty(AzureAISearch.ApiKey);
@@ -60,6 +61,10 @@
     {
         public string Endpoint { get; set; } = string.Empty;
         public string ApiKey { get; set; } = string.Empty;
+        public bool IndexPerChatSession { get; set; } = false;
+        public string SharedIndex {  get; set; } = string.Empty;
+        public string SharedIndexAzureBlobStorageConnection {  get; set; } = string.Empty;
+        public string SharedIndexAzureBlobStorageContainer {  get; set; } = string.Empty;
     }
 
     public class MCPServerConfig

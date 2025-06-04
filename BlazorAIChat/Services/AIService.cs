@@ -35,6 +35,7 @@ namespace BlazorAIChat.Services
         private readonly ChatHistoryService chatHistoryService;
         private readonly ILogger<AIService> logger;
         private readonly Kernel kernel;
+        private readonly AISearchService? azureAISearchService;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="AIService"/> class.
@@ -44,12 +45,13 @@ namespace BlazorAIChat.Services
         /// <param name="httpClientFactory">The HTTP client factory.</param>
         /// <param name="dbContext">The database context.</param>
         /// <param name="kernel">The Semantic Kernel instance.</param>
-        public AIService(IOptions<AppSettings> appSettings, ChatHistoryService chatHistoryService, IHttpClientFactory httpClientFactory, AIChatDBContext dbContext, ILogger<AIService> logger, Kernel kernel)
+        public AIService(IOptions<AppSettings> appSettings, ChatHistoryService chatHistoryService, IHttpClientFactory httpClientFactory, AIChatDBContext dbContext, ILogger<AIService> logger, Kernel kernel, AISearchService aISearchService)
         {
             this.dbContext = dbContext;
             this.chatHistoryService = chatHistoryService;
             this.logger = logger;
             this.kernel = kernel;
+            this.azureAISearchService = aISearchService;
             settings = appSettings.Value;
             httpClient = httpClientFactory.CreateClient("retryHttpClient");
             chatCompletionTokenizer = TokenizerFactory.GetTokenizerForModel(settings.AzureOpenAIChatCompletion.Tokenizer);
@@ -103,12 +105,12 @@ namespace BlazorAIChat.Services
                 Name = "RAGDecisionAgent",
                 Kernel = kernel,
                 Instructions = $"""
-                    You are an AI assistant that determines whether a query requires knowledge retrieval.
+                    You are an AI assistant that determines whether a query can be answered by tools alone.
                     
                     Analyze the user's query and respond with 'true' if the query likely needs to retrieve information from stored knowledge, or 'false' if the query can be answered using the available tools.
                     If the query contains URLs, it should always return 'true'.
                     If the query can be answered with both the tools and knowledge retrieval, it should return 'true'.
-                    If you are unsure, return 'true'.
+                    If you are unsure, return 'true'
                                       
                     Respond only with 'true' or 'false'.
                 """,
@@ -132,7 +134,7 @@ namespace BlazorAIChat.Services
                 .WithAzureOpenAITextEmbeddingGeneration(new AzureOpenAIConfig() { Auth = AzureOpenAIConfig.AuthTypes.APIKey, APIKey = settings.AzureOpenAIChatCompletion.ApiKey, Deployment = settings.AzureOpenAIEmbedding.DeploymentName, Endpoint = settings.AzureOpenAIChatCompletion.Endpoint }, embeddingTokenizer, httpClient: httpClient)
                 .WithAzureOpenAITextGeneration(new AzureOpenAIConfig() { Auth = AzureOpenAIConfig.AuthTypes.APIKey, APIKey = settings.AzureOpenAIChatCompletion.ApiKey, Deployment = settings.AzureOpenAIChatCompletion.DeploymentName, Endpoint = settings.AzureOpenAIChatCompletion.Endpoint }, chatCompletionTokenizer, httpClient);
 
-            if (settings.UsesAzureAISearch)
+            if (settings.UsesAzureAISearch && settings.AzureAISearch.IndexPerChatSession)
             {
                 kernelMemoryBuilder = kernelMemoryBuilder.WithAzureAISearchMemoryDb(new AzureAISearchConfig()
                 {
@@ -259,6 +261,11 @@ namespace BlazorAIChat.Services
         /// <returns>True if RAG should be used, false otherwise</returns>
         private async Task<bool> ShouldUseRAGForPrompt(string prompt, string sessionId)
         {
+            // If the configuration indicates that we should not use AI to determine RAG usage
+            // we always return true to use RAG.
+            if (settings.AIDeterminesRagUsage == false)
+                return true;
+
             // Always use RAG if URLs are present in the prompt
             if (StringUtils.GetURLsFromString(prompt).Count > 0)
             {
@@ -363,6 +370,19 @@ namespace BlazorAIChat.Services
                     }
                     history.AddUserMessage("----------------------------------");
                 }
+            }
+
+            //If Azure AI Search shared index is configured and ready, search that.
+            if (azureAISearchService != null && azureAISearchService.IsReady)
+            {
+                var sharedResults = await azureAISearchService.Search(prompt,5,exhaustive:true,semantic:true);
+                history.AddUserMessage("Below are facts related to the question. Use supplied tools if required to fully answer the request without asking them for more information.");
+                foreach (var r in sharedResults)
+                {
+                    if (r.chunk!=null)
+                        history.AddUserMessage(r.chunk);
+                }
+                history.AddUserMessage("----------------------------------");
             }
 
             // Add the original prompt to the chat history
