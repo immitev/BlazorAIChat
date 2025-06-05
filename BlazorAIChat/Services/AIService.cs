@@ -235,7 +235,7 @@ namespace BlazorAIChat.Services
             }
 
             // Clean up the chat history to fit within the token limit
-            history = AIUtils.CleanUpHistory(history, chatCompletionTokenizer, settings.AzureOpenAIChatCompletion.MaxInputTokens);
+            history = await AIUtils.CleanUpHistoryAsync(history, chatCompletionService, 10, 5);
 
             IAsyncEnumerable<StreamingChatMessageContent> streamingMessages;
 
@@ -246,8 +246,9 @@ namespace BlazorAIChat.Services
                 FunctionChoiceBehavior = FunctionChoiceBehavior.Auto(options: new() { RetainArgumentTypes = true })
             };
 
+            
             streamingMessages = chatCompletionService.GetStreamingChatMessageContentsAsync(history, executionSettings, kernel);
-
+            
             // Buffer and yield messages in chunks
             logger.LogInformation("Chat response generation completed for session: {SessionId}", currentSession.SessionId);
             return BufferMessagesInChunks(streamingMessages, settings.AzureOpenAIChatCompletion.ResponseChunkSize);

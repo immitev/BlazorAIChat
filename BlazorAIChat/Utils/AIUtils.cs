@@ -1,41 +1,35 @@
 ﻿using Microsoft.KernelMemory.AI;
 using Microsoft.SemanticKernel.ChatCompletion;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace BlazorAIChat.Utils
 {
     public static class AIUtils
     {
-#pragma warning disable  KMEXP00
+#pragma warning disable KMEXP00
 
-        public static ChatHistory CleanUpHistory(ChatHistory history, ITextTokenizer tokenizer, int MaxTokens)
+        public static async Task<ChatHistory> CleanUpHistoryAsync(
+            ChatHistory history,
+            IChatCompletionService chatCompletionService,
+            int targetMessageCount,
+            int? thresholdCount,
+            CancellationToken cancellationToken = default)
         {
+            var reducer = new ChatHistorySummarizationReducer(
+                chatCompletionService,
+                targetMessageCount,
+                thresholdCount);
 
-            string fullContext = CreateStringFromHistory(history);
+            var reduced = await reducer.ReduceAsync(history, cancellationToken).ConfigureAwait(false);
 
-            while (tokenizer.CountTokens(fullContext) >= MaxTokens)
-            {
-                foreach (var m in history)
-                {
-                    if (m.Role!= AuthorRole.System)
-                    {
-                        history.Remove(m);
-                        break;
-                    }
-                }
+            //if reduced is null, we just pass the current chat history back, otherwise we send back the new reduced history
+            if (reduced is null)
+                return history;
+            else
+                return new ChatHistory(reduced);
 
-                fullContext =  CreateStringFromHistory(history);
-            }
-
-            return history;
-        }
-
-        public static string CreateStringFromHistory(ChatHistory history)
-        {
-            StringBuilder fullContext = new StringBuilder();
-            foreach (var m in history)
-                fullContext.Append(m.ToString());
-            return fullContext.ToString();
         }
     }
 }

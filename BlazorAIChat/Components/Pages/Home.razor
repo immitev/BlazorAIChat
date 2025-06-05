@@ -428,14 +428,14 @@ else
                     isResponding = false;
                     StateHasChanged();
                     Console.WriteLine($"Network error while processing chat: {ex.Message}");
-                    ShowAlert("Network error while processing chat. Please check your connection.", AlertTypeEnum.danger);
+                    ShowAlert($"Network error while processing chat. Please check your connection. {ex.Message}", AlertTypeEnum.danger);
                 }
                 catch (Exception ex)
                 {
                     isResponding = false;
                     StateHasChanged();
                     Console.WriteLine($"StreamChatCompletionAsync error: {ex.Message}");
-                    ShowAlert("An unexpected error occurred while processing the chat.", AlertTypeEnum.danger);
+                    ShowAlert($"An unexpected error occurred while processing the chat.  {ex.Message}", AlertTypeEnum.danger);
                 }
             }
         }
