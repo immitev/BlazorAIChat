@@ -70,6 +70,37 @@ namespace BlazorAIChat.Services
             kernelMemory = InitializeKernelMemory();
         }
 
+        /// <summary>
+        /// Gets a formatted list of available functions in the kernel
+        /// </summary>
+        private string GetAvailableFunctionsList(Kernel kernel)
+        {
+            var sb = new StringBuilder();
+            var plugins = kernel.Plugins;
+
+            foreach (var plugin in plugins)
+            {
+                sb.AppendLine($"- Plugin: {plugin.Name}");
+                foreach (var function in plugin.GetFunctionsMetadata())
+                {
+                    sb.AppendLine($"  • {function.Name}: {function.Description}");
+
+                    // Include parameter info for better understanding
+                    if (function.Parameters.Count > 0)
+                    {
+                        sb.AppendLine("    Parameters:");
+                        foreach (var param in function.Parameters)
+                        {
+                            sb.AppendLine($"      - {param.Name}: {param.Description}");
+                        }
+                    }
+                }
+                sb.AppendLine();
+            }
+
+            return sb.ToString().Trim();
+        }
+
         private (ChatCompletionAgent sessionSummaryAgent, ChatCompletionAgent promptRewriteAgent, ChatCompletionAgent ragDecisionAgent, ChatCompletionAgent contextualQueryAgent) InitializeAgents()
         {
             var sessionSummaryAgent = new ChatCompletionAgent
@@ -106,21 +137,35 @@ namespace BlazorAIChat.Services
                 Name = "RAGDecisionAgent",
                 Kernel = kernel,
                 Instructions = $"""
-                    Determine whether the question can be answered by tools alone.
+                    Determine whether the question can be answered by the available tools or requires retrieval from stored knowledge.
                     
-                    Analyze the question and respond with 'true' if the question likely needs to retrieve information from stored knowledge, or 'false' if the question can be answered using the available tools.
-                    If the question contains URLs, it should always return 'true'.
-                    If the question can be answered with both the tools and knowledge retrieval, it should return 'true'.
-                    If you are unsure, return 'true'
-                                      
-                    Respond only with 'true' or 'false'.
+                    AVAILABLE KERNEL FUNCTIONS:
+                    {GetAvailableFunctionsList(kernel)}
+                    
+                    RULES FOR DECISION:
+                    1. If the question contains URLs, ALWAYS return 'true'
+                    2. If the question refers to specific documents or uploaded content, return 'true'
+                    3. If the question requires factual information, specific data, or domain knowledge like legal requirements, demographics, statistics, regulations, historical facts, or specific information about locations, return 'true'
+                    4. If the question can be answered using only simple utility functions like getting the current time, date, or basic calculations, return 'false'
+                    5. For ambiguous cases where both tools and retrieval might help, prefer 'true'
+                    6. If you are unsure, return 'true'
+                          
+                    EXAMPLES:
+                    - "What time is it?" → 'false' (can be answered by tools)
+                    - "What is the weather in Detroit?" → 'false' (can be answered by tools)
+                    - "Summarize the PDF I uploaded" → 'true' (needs retrieval)
+                    - "What does this webpage say about climate change: https://example.com" → 'true' (contains URL)
+                    - "How old do you have to be to get a driver's license in Ohio?" → 'true' (requires factual/legal information)
+                    - "What are the requirements to vote in California?" → 'true' (requires factual/legal information)
+
+                    
+                    Analyze the question and respond with ONLY 'true' or 'false'.
                 """,
                 Arguments = new KernelArguments(
                     new OpenAIPromptExecutionSettings()
                     {
                         Temperature = 0,
                         MaxTokens = 10,
-                        ToolCallBehavior = ToolCallBehavior.EnableKernelFunctions
                     })
             };
 
