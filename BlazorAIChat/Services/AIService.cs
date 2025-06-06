@@ -323,70 +323,85 @@ namespace BlazorAIChat.Services
         }
 
         /// <summary>
-        /// Performs Retrieval-Augmented Generation (RAG) on the given prompt.
+        /// Generates a context-aware search query using recent chat history.
         /// </summary>
-        /// <param name="prompt">The prompt for the chat.</param>
-        /// <param name="message">The message object.</param>
-        /// <param name="currentSession">The current session.</param>
-        /// <param name="currentUser">The current user.</param>
+        private async Task<string> GenerateContextualQuery(string prompt, string sessionId, int historyTurns = 4)
+        {
+            var messages = await chatHistoryService.GetSessionMessagesAsync(sessionId).ConfigureAwait(false);
+            var recentMessages = messages.OrderByDescending(m => m.TimeStamp).Take(historyTurns).OrderBy(m => m.TimeStamp).ToList();
+            var sb = new StringBuilder();
+            foreach (var msg in recentMessages)
+            {
+                sb.AppendLine($"User: {msg.Prompt}");
+                if (!string.IsNullOrWhiteSpace(msg.Completion))
+                    sb.AppendLine($"Assistant: {msg.Completion}");
+            }
+            sb.AppendLine($"User: {prompt}");
+            // Optionally, use an agent to condense this into a search query
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Filters and prioritizes search results from kernel memory and Azure AI Search.
+        /// </summary>
+        private List<string> FilterAndPrioritizeResults(SearchResult? searchData, List<(double? score, string? title, string? chunk)>? azureResults)
+        {
+            var combinedResults = new List<(double score, string content, string source)>();
+            if (searchData != null && !searchData.NoResult)
+            {
+                foreach (var result in searchData.Results)
+                {
+                    // Use 1.0 as default relevance if not available
+                    double relevance = 1.0;
+                    if (result.GetType().GetProperty("Relevance") != null)
+                    {
+                        relevance = (double)(result.GetType().GetProperty("Relevance")?.GetValue(result) ?? 1.0);
+                    }
+                    foreach (var p in result.Partitions)
+                    {
+                        combinedResults.Add((relevance, p.Text, result.SourceName));
+                    }
+                }
+            }
+            if (azureResults != null)
+            {
+                foreach (var r in azureResults.Where(r => r.chunk != null))
+                {
+                    combinedResults.Add((r.score ?? 0.5, r.chunk!, r.title ?? "Unknown"));
+                }
+            }
+            return combinedResults.OrderByDescending(r => r.score).Take(5).Select(r => $"SOURCE: {r.source}\n{r.content}").ToList();
+        }
+
         private async Task DoRAG(string prompt, Message message, Session currentSession, User currentUser)
         {
             logger.LogInformation("Performing RAG for session: {SessionId}, user: {UserId}", currentSession.SessionId, currentUser.Id);
             var urls = StringUtils.GetURLsFromString(prompt);
             SearchResult? searchData = null;
+            List<(double? score, string? title, string? chunk)>? sharedResults = null;
+            string contextualQuery = await GenerateContextualQuery(prompt, currentSession.SessionId);
             if (urls.Count > 0)
             {
-                // Process URLs with kernel memory
                 await ProcessURLsWithKernelMemory(urls, currentSession, currentUser).ConfigureAwait(false);
-
-                // Generate a new prompt without URLs
                 string messageToProcessNoURLS = await GenerateNewPromptForMessagesWithUrl(prompt).ConfigureAwait(false);
-
-                // Search the kernel memory with the new prompt
-                searchData = await kernelMemory!.SearchAsync(messageToProcessNoURLS, currentSession.Id, minRelevance: 0.5, limit: 5).ConfigureAwait(false);
+                searchData = await kernelMemory!.SearchAsync(contextualQuery, currentSession.Id, minRelevance: 0.5, limit: 5).ConfigureAwait(false);
             }
             else
             {
-                // Search the kernel memory with the original prompt
-                searchData = await kernelMemory!.SearchAsync(prompt, currentSession.Id, minRelevance: 0.5, limit: 5).ConfigureAwait(false);
+                searchData = await kernelMemory!.SearchAsync(contextualQuery, currentSession.Id, minRelevance: 0.5, limit: 5).ConfigureAwait(false);
             }
-
-            if (searchData != null && !searchData.NoResult)
-            {
-                if (searchData.Results.Count > 0)
-                {
-                    history.AddUserMessage("Below are facts related to the question. Use supplied tools if required to fully answer the request without asking them for more information.");
-                    foreach (var result in searchData.Results)
-                    {
-                        foreach (var p in result.Partitions)
-                        {
-                            // Add the search result text to the chat history
-                            history.AddUserMessage(p.Text);
-                        }
-
-                        // Add citations to the message
-                        if (result.SourceName.ToLower() == "content.url")
-                            message.Citations.Add($"{result.SourceUrl}");
-                        else
-                            message.Citations.Add($"{result.SourceName}");
-                    }
-                    history.AddUserMessage("----------------------------------");
-                }
-            }
-
-            //If Azure AI Search shared index is configured and ready, search that.
             if (azureAISearchService != null && azureAISearchService.IsReady)
             {
-                var sharedResults = await azureAISearchService.Search(prompt,5,exhaustive:true,semantic:true);
-                history.AddUserMessage("Below are facts related to the question. Use supplied tools if required to fully answer the request without asking them for more information.");
-                foreach (var r in sharedResults)
-                {
-                    if (r.chunk!=null)
-                        history.AddUserMessage(r.chunk);
-                }
-                history.AddUserMessage("----------------------------------");
+                sharedResults = await azureAISearchService.Search(contextualQuery, 5, exhaustive: false, semantic: true);
             }
-
+            var relevantContent = FilterAndPrioritizeResults(searchData, sharedResults);
+            if (relevantContent.Any())
+            {
+                history.AddUserMessage(
+                    "I've found relevant information from your documents that may help answer your question:\n\n" +
+                    string.Join("\n\n---\n\n", relevantContent)
+                );
+            }
             // Add the original prompt to the chat history
             history.AddUserMessage(prompt);
             logger.LogInformation("RAG completed for session: {SessionId}", currentSession.SessionId);
