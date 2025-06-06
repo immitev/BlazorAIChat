@@ -32,6 +32,7 @@ namespace BlazorAIChat.Services
         private readonly ChatCompletionAgent sessionSummaryAgent;
         private readonly ChatCompletionAgent promptRewriteAgent;
         private readonly ChatCompletionAgent ragDecisionAgent;
+        private readonly ChatCompletionAgent contextualQueryAgent;
         private readonly ChatHistoryService chatHistoryService;
         private readonly ILogger<AIService> logger;
         private readonly Kernel kernel;
@@ -63,13 +64,13 @@ namespace BlazorAIChat.Services
             textEmbeddingGenerationService = kernel.GetRequiredService<IEmbeddingGenerator<string, Embedding<float>>>();
 
             // Initialize agents
-            (sessionSummaryAgent, promptRewriteAgent, ragDecisionAgent) = InitializeAgents();
+            (sessionSummaryAgent, promptRewriteAgent, ragDecisionAgent, contextualQueryAgent) = InitializeAgents();
 
             // Initialize Kernel Memory
             kernelMemory = InitializeKernelMemory();
         }
 
-        private (ChatCompletionAgent sessionSummaryAgent, ChatCompletionAgent promptRewriteAgent, ChatCompletionAgent ragDecisionAgent) InitializeAgents()
+        private (ChatCompletionAgent sessionSummaryAgent, ChatCompletionAgent promptRewriteAgent, ChatCompletionAgent ragDecisionAgent, ChatCompletionAgent contextualQueryAgent) InitializeAgents()
         {
             var sessionSummaryAgent = new ChatCompletionAgent
             {
@@ -123,7 +124,20 @@ namespace BlazorAIChat.Services
                     })
             };
 
-            return (sessionSummaryAgent, promptRewriteAgent, ragDecisionAgent);
+            var contextualQueryAgent = new ChatCompletionAgent
+            {
+                Name = "ContextualQueryAgent",
+                Kernel = kernel,
+                Instructions = @"Condense the following chat history and user prompt into a concise, context-aware search query. Only output the search query, no explanations or extra text.",
+                Arguments = new KernelArguments(
+                    new OpenAIPromptExecutionSettings()
+                    {
+                        Temperature = 0.2f,
+                        MaxTokens = 64
+                    })
+            };
+
+            return (sessionSummaryAgent, promptRewriteAgent, ragDecisionAgent, contextualQueryAgent);
         }
 
         private MemoryServerless? InitializeKernelMemory()
@@ -337,8 +351,20 @@ namespace BlazorAIChat.Services
                     sb.AppendLine($"Assistant: {msg.Completion}");
             }
             sb.AppendLine($"User: {prompt}");
-            // Optionally, use an agent to condense this into a search query
-            return sb.ToString();
+            // Use an agent to condense this into a search query
+            ChatHistory agentHistory = new() { new ChatMessageContent(AuthorRole.User, sb.ToString()) };
+            StringBuilder output = new();
+            Microsoft.SemanticKernel.Agents.AgentThread? agentThread = null;
+            await foreach (var response in contextualQueryAgent.InvokeAsync(agentHistory, agentThread).ConfigureAwait(false))
+            {
+                output.Append(response.Message.ToString());
+                agentThread = response.Thread;
+            }
+            if (agentThread is not null)
+            {
+                await agentThread.DeleteAsync();
+            }
+            return output.ToString().Trim();
         }
 
         /// <summary>
