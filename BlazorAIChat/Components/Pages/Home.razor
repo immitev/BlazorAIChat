@@ -205,6 +205,17 @@ else
     //NavMenu component
     private NavMenu? NavMenu = default;
 
+    //Supported file extensions
+    private static readonly HashSet<string> SupportedDocumentExtensions = new()
+    {
+        ".pdf", ".docx", ".xlsx", ".pptx", ".txt", ".md"
+    };
+
+    private static readonly HashSet<string> SupportedImageExtensions = new()
+    {
+        ".jpg", ".jpeg", ".png", ".gif"
+    };
+
     //Config data from database
     private Config config = new Config(){ Id=Guid.Empty};
 
@@ -244,6 +255,41 @@ else
     AppSettings settings = new AppSettings();
 
     bool isPageFullyLoaded = false;
+
+    /// <summary>
+    /// Validates if a file extension is supported based on the current settings.
+    /// </summary>
+    /// <param name="fileName">The file name to validate.</param>
+    /// <returns>True if the file extension is supported, false otherwise.</returns>
+    private bool IsFileExtensionSupported(string fileName)
+    {
+        var extension = Path.GetExtension(fileName).ToLower();
+        
+        // Check document extensions (always supported)
+        if (SupportedDocumentExtensions.Contains(extension))
+        {
+            return true;
+        }
+        
+        // Check image extensions (only if images are supported)
+        if (settings.AzureOpenAIChatCompletion.SupportsImages && SupportedImageExtensions.Contains(extension))
+        {
+            return true;
+        }
+        
+        return false;
+    }
+
+    /// <summary>
+    /// Checks if a file is an image based on its extension.
+    /// </summary>
+    /// <param name="fileName">The file name to check.</param>
+    /// <returns>True if the file is an image, false otherwise.</returns>
+    private bool IsImageFile(string fileName)
+    {
+        var extension = Path.GetExtension(fileName).ToLower();
+        return SupportedImageExtensions.Contains(extension);
+    }
 
     /// <summary>
     /// Initializes the page and loads necessary data.
@@ -487,8 +533,7 @@ else
 
             // Only upload PDFs, DOCX, XLSX, PPTX, MD, TXT and image files such as JPG, JPEG, PNG, and GIF
             var fileName = selectedFile.Name.ToLower();
-            if (!(fileName.EndsWith(".pdf") || fileName.EndsWith(".docx") || fileName.EndsWith(".xlsx") || fileName.EndsWith(".pptx") || fileName.EndsWith(".txt") || fileName.EndsWith(".md") ||
-                  (settings.AzureOpenAIChatCompletion.SupportsImages && (fileName.EndsWith(".jpg") || fileName.EndsWith(".jpeg") || fileName.EndsWith(".png") || fileName.EndsWith(".gif")))))
+            if (!IsFileExtensionSupported(fileName))
             {
                 string alertMessage = (settings.AzureOpenAIChatCompletion.SupportsImages || settings.UsesAzureDocIntelligence)
                     ? "Please upload a PDF, DOCX, XLSX, PPTX, MD, TXT, or image file."
@@ -507,7 +552,7 @@ else
             await stream.CopyToAsync(memoryStream);
 
             //Check to see how we need to process the files.
-            if (settings.AzureOpenAIChatCompletion.SupportsImages && (fileName.EndsWith(".jpg") || fileName.EndsWith(".jpeg") || fileName.EndsWith(".png") || fileName.EndsWith(".gif")))
+            if (settings.AzureOpenAIChatCompletion.SupportsImages && IsImageFile(fileName))
             {
                 await ProcessImageAsync(memoryStream, fileName);
             }
