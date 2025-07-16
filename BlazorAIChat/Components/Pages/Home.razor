@@ -168,7 +168,7 @@ else
                                             Get Started
                                         </h4>
                                         <p class="mb-0 fst-italic">
-                                            Start chatting with your AI assistant. You can upload images or documents, or provide URLs to ask questions about their content. Supported formats include Word, Excel, PowerPoint, Text, and PDF. Note that encrypted files and those with digital rights management are not supported.
+                                            Start chatting with your AI assistant. You can upload images or documents, or provide URLs to ask questions about their content. Supported formats include Word, Excel, PowerPoint, Markdown, Text, and PDF. Note that encrypted files and those with digital rights management are not supported.
                                         </p>
                                     </div>
                                 }
@@ -485,14 +485,14 @@ else
                 return;
             }
 
-            // Only upload PDFs, DOCX, XLSX, PPTX, TXT and image files files such as JPG, JPEG, PNG, and GIF
+            // Only upload PDFs, DOCX, XLSX, PPTX, MD, TXT and image files such as JPG, JPEG, PNG, and GIF
             var fileName = selectedFile.Name.ToLower();
-            if (!(fileName.EndsWith(".pdf") || fileName.EndsWith(".docx") || fileName.EndsWith(".xlsx") || fileName.EndsWith(".pptx") || fileName.EndsWith(".txt") ||
+            if (!(fileName.EndsWith(".pdf") || fileName.EndsWith(".docx") || fileName.EndsWith(".xlsx") || fileName.EndsWith(".pptx") || fileName.EndsWith(".txt") || fileName.EndsWith(".md") ||
                   (settings.AzureOpenAIChatCompletion.SupportsImages && (fileName.EndsWith(".jpg") || fileName.EndsWith(".jpeg") || fileName.EndsWith(".png") || fileName.EndsWith(".gif")))))
             {
                 string alertMessage = (settings.AzureOpenAIChatCompletion.SupportsImages || settings.UsesAzureDocIntelligence)
-                    ? "Please upload a PDF, DOCX, XLSX, PPTX, TXT, or image file."
-                    : "Please upload a PDF, DOCX, XLSX, PPTX, or TXT file. Image uploads are not supported.";
+                    ? "Please upload a PDF, DOCX, XLSX, PPTX, MD, TXT, or image file."
+                    : "Please upload a PDF, DOCX, XLSX, PPTX, MD, or TXT file. Image uploads are not supported.";
                 ShowAlert($"The file {selectedFile.Name} is not a supported file type. {alertMessage}", AlertTypeEnum.warning);
                 return;
             }
