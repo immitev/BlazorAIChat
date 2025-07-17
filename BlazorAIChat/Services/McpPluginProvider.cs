@@ -16,7 +16,7 @@ namespace BlazorAIChat.Services
                 try
                 {
                     IMcpClient mcpClient;
-                    if (server.Type.ToLower() == "stdio")
+                    if (server.Type.ToLower() == "stdio" || server.Type==string.Empty)
                     {
                         mcpClient = await McpClientFactory.CreateAsync(new StdioClientTransport(new()
                         {
