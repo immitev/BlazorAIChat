@@ -11,7 +11,7 @@
         public CosmosDbSettings CosmosDb { get; set; } = new CosmosDbSettings();
         public DocumentIntelligenceSettings DocumentIntelligence { get; set; } = new DocumentIntelligenceSettings();
         public AzureAISearchSettings AzureAISearch { get; set; } = new AzureAISearchSettings();
-        public List<MCPServerConfig> MCPServers { get; set; } = new List<MCPServerConfig>();
+        public McpConfig Mcp { get; set; } = new McpConfig();
         public bool AIDeterminesRagUsage { get; set; } = true;
         public bool UsesPostgreSQL => !string.IsNullOrEmpty(ConnectionStrings.PostgreSQL);
         public bool UsesCosmosDb => !string.IsNullOrEmpty(ConnectionStrings.CosmosDb);
@@ -72,14 +72,27 @@
         public string SharedIndexAzureBlobStorageContainer {  get; set; } = string.Empty;
     }
 
-    public class MCPServerConfig
+    public class McpConfig
     {
-        public string Endpoint { get; set; } = string.Empty;
-        public string Name { get; set; } = string.Empty;
-        public string Version { get; set; } = string.Empty;
+        public List<McpInput> Inputs { get; set; } = new();
+        public Dictionary<string, McpServer> Servers { get; set; } = new();
+    }
+
+    public class McpInput
+    {
+        public string Id { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
         public string Type { get; set; } = string.Empty;
-        public List<string> Args { get; set; } = new List<string>();
-        public Dictionary<string,string> Headers { get; set; } = new Dictionary<string, string>();
-        public Dictionary<string,string?> Env { get; set; } = new Dictionary<string, string?>();
+        public bool Password { get; set; }
+    }
+
+    public class McpServer
+    {
+        public string Type { get; set; } = string.Empty;
+        public string? Command { get; set; }
+        public List<string>? Args { get; set; }
+        public Dictionary<string, string>? Env { get; set; }
+        public string? Url { get; set; }
+        public Dictionary<string, string>? Headers { get; set; }
     }
 }

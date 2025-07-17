@@ -11,52 +11,55 @@ namespace BlazorAIChat.Services
 
         public async Task InitializeAsync(AppSettings appSettings, IHttpClientFactory httpClientFactory, ILogger logger)
         {
-            foreach (var server in appSettings.MCPServers)
+            if (appSettings.Mcp?.Servers == null)
+                return;
+
+            foreach (var serverEntry in appSettings.Mcp.Servers)
             {
+                var serverName = serverEntry.Key;
+                var server = serverEntry.Value;
                 try
                 {
                     IMcpClient mcpClient;
-                    if (server.Type.ToLower() == "stdio" || server.Type==string.Empty)
+                    if (server.Type.ToLower() == "stdio" || string.IsNullOrEmpty(server.Type))
                     {
                         mcpClient = await McpClientFactory.CreateAsync(new StdioClientTransport(new()
                         {
-                            Name = server.Name,
-                            Command = server.Endpoint,
-                            Arguments = server.Args,
-                            EnvironmentVariables = server.Env,
+                            Name = serverName,
+                            Command = server.Command ?? string.Empty,
+                            Arguments = server.Args ?? new List<string>(),
+                            EnvironmentVariables = server.Env ?? new Dictionary<string, string>()
                         }));
                     }
                     else if (server.Type.ToLower() == "sse")
                     {
-                        // Use defaultHttpClient for SSE (no retry policy)
                         var httpClient = httpClientFactory.CreateClient("defaultHttpClient");
                         mcpClient = await McpClientFactory.CreateAsync(
                             new SseClientTransport(httpClient: httpClient, transportOptions: new SseClientTransportOptions()
                             {
-                                Endpoint = new Uri(server.Endpoint),
-                                AdditionalHeaders = server.Headers
+                                Endpoint = new Uri(server.Url ?? string.Empty),
+                                AdditionalHeaders = server.Headers ?? new Dictionary<string, string>()
                             }),
                             new McpClientOptions()
                             {
-                                ClientInfo = new() { Name = server.Name, Version = server.Version }
+                                ClientInfo = new() { Name = serverName, Version = "1.0.0.0" }
                             });
                     }
                     else
                     {
-                        // If you have other types that use HttpClient, use this client
                         throw new NotSupportedException($"Unsupported server type: {server.Type}");
                     }
 
                     IList<McpClientTool> tools = await mcpClient.ListToolsAsync();
                     var plugin = KernelPluginFactory.CreateFromFunctions(
-                        server.Name,
+                        serverName,
                         tools.Select(tool => tool.AsKernelFunction())
                     );
                     Plugins.Add(plugin);
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, $"Error connecting to MCP server {server.Name}: {ex.Message}");
+                    logger.LogError(ex, $"Error connecting to MCP server {serverName}: {ex.Message}");
                 }
             }
         }

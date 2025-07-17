@@ -87,23 +87,47 @@ The appsettings.json file has a few configuration parameters that must be set fo
   "SharedIndexAzureBlobStorageConnection": "",
   "SharedIndexAzureBlobStorageContainer": ""
 },
-"MCPServers": [
-  {
-    "Type": "[sse|stdio]"
-    "Name": "MCPServerName",
-    "Version": "1.0.0.0",
-    "Endpoint": "[uri|file path]",
-    "Args": [
-
-    ],
-    "Headers": {
-      "header key": "header value"
+"mcp": {
+  "inputs": [
+    {
+      "id": "github_pat",
+      "description": "GitHub personal access token",
+      "type": "promptString",
+      "password": true
     },
-    "Env": {
-      "ENV_VAR": "Env value"
+    {
+      "id": "api_token",
+      "description": "API token for SSE server",
+      "type": "promptString",
+      "password": true
+    }
+  ],
+  "servers": {
+    "github-stdio": {
+      "type": "stdio",
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "GITHUB_PERSONAL_ACCESS_TOKEN",
+        "ghcr.io/github/github-mcp-server"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${input:github_pat}"
+      }
+    },
+    "secure-sse-tool": {
+      "type": "sse",
+      "url": "https://your-secure-sse-server.example.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ${input:api_token}",
+        "X-Custom-Header": "custom-value"
+      }
     }
   }
-]
+}
 ```
 - **AIDeterminesRagUsage**
 True if you want AI to determine if it should skip using RAG and use configured tools instead for answering questions.
@@ -141,16 +165,63 @@ This can also be configued to replace the file and PostgreSQL knowledge store fo
 - **EasyAuth Configuration**: 
   - If utilizing EasyAuth with Azure App Service, it is recommended to set `RequireEasyAuth` to `true` to ensure that users are fully authenticated and not recognized as guests. This setting is set to true by default.
 
-- **MCPServers Configuration**:
-This section allows you to configure multiple MCP servers that provide tools to the AI for responding to user's requests. This section
-is not required. Tools available on MCP servers are only determined when the web application starts up. If a MCP server updates the list of available tools you will need to restart this web application to use them. If the web application cannot communicate with the MCP server, it will ignore it.
-  - **Type**: Defineds the transport type for the MCP Server. This can be stdio or sse.
-  - **Name**: The name of the MCP server. Must only contain alphanumeric values with no spaces. Underlines are allowed.
-  - **Version**: Version number for the MCP Server
-  - **Endpoint**: URL or file path to the MCP Server
-  - **Args**: List of command line arguments for stdio transport MCP Servers.
-  - **Headers**: A list of http headers to send when connecting to MCP servers using sse transport.
-  - **Env**: A list of environment variables and values for use when connecting to MCP servers using stdio transport.
+- **MCP Configuration**:
+This section allows you to configure multiple MCP servers and user-supplied inputs for tools provided by Model Context Protocol (MCP) servers. The configuration is structured as follows:
+  - **inputs**: An array of input definitions, each with an `id`, `description`, `type`, and `password` flag. These can be referenced in server configuration using `${input:input_id}`.  Note: This is not fully implemented yet and does not replace placeholders with values.
+  - **servers**: A dictionary of MCP server definitions, keyed by server name. Each server can have:
+    - **type**: The transport type for the MCP Server (`stdio` or `sse`).
+    - **command**: The command to launch the server (for `stdio` type).
+    - **args**: List of command line arguments (for `stdio` type).
+    - **env**: Dictionary of environment variables (for `stdio` type). Keys and values are arbitrary, and values can reference inputs.
+    - **url**: The URL to connect to (for `sse` type).
+    - **headers**: Dictionary of HTTP headers (for `sse` type). Keys and values are arbitrary, and values can reference inputs.
+
+Example MCP configuration:
+```
+"mcp": {
+  "inputs": [
+    {
+      "id": "github_pat",
+      "description": "GitHub personal access token",
+      "type": "promptString",
+      "password": true
+    },
+    {
+      "id": "api_token",
+      "description": "API token for SSE server",
+      "type": "promptString",
+      "password": true
+    }
+  ],
+  "servers": {
+    "github-stdio": {
+      "type": "stdio",
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "GITHUB_PERSONAL_ACCESS_TOKEN",
+        "ghcr.io/github/github-mcp-server"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${input:github_pat}"
+      }
+    },
+    "secure-sse-tool": {
+      "type": "sse",
+      "url": "https://your-secure-sse-server.example.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ${input:api_token}",
+        "X-Custom-Header": "custom-value"
+      }
+    }
+  }
+}
+```
+- **inputs**: Define any user-supplied secrets or tokens needed for MCP servers. These can be referenced in `env` or `headers` using `${input:input_id}`.
+- **servers**: Define each MCP server, specifying its type, command/args/env (for stdio), or url/headers (for sse). The `env` and `headers` sections support any number of arbitrary key-value pairs, and values can reference inputs.
 
 This solution has been tested with the `gpt-4o` chat model and the `text-embedding-ada-002` model. Other models can be integrated and tested as needed.
 
