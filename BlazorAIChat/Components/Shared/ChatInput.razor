@@ -1,8 +1,9 @@
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.AspNetCore.Components.Web
+@inject IJSRuntime JSRuntime
 
 <div class="input-group">
-    <input type="text" class="form-control" placeholder="Enter your message" disabled="@IsResponding" @bind-value="UserMessage" @bind-value:event="oninput" @onkeydown="HandleKeyDown" />
+    <input @ref="inputElement" type="text" class="form-control" placeholder="Enter your message" disabled="@IsResponding" @bind-value="UserMessage" @bind-value:event="oninput" @onkeydown="HandleKeyDown" />
     <button class="btn btn-primary" @onclick="SendMessage">Send</button>
     <label class="btn file-selector" for="fileInput">Upload File</label>
     <InputFile id="fileInput" @ref="InputFileRef" class="d-none" OnChange="OnFileSelected" disabled="@(IsFileInputDisabled || IsResponding)" />
@@ -10,6 +11,7 @@
 </div>
 
 @code {
+    private ElementReference inputElement;
 
     [Parameter]
     public string UserMessage { get; set; } = string.Empty;
@@ -45,6 +47,19 @@
         if (!string.IsNullOrWhiteSpace(UserMessage))
         {
             await UserMessageChanged.InvokeAsync(UserMessage);
+        }
+    }
+
+    public async Task FocusInputAsync()
+    {
+        try
+        {
+            await inputElement.FocusAsync();
+        }
+        catch (Exception ex)
+        {
+            // Silently handle focus errors as they're not critical
+            Console.WriteLine($"Focus error: {ex.Message}");
         }
     }
 }

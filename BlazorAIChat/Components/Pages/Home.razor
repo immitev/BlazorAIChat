@@ -182,7 +182,7 @@ else
                     <div class="bg-primary text-light px-4 py-2 rounded-top-5 text-dark d-flex flex-column justify-content-center">
                         @if (currentSession is not null && currentSession?.SessionId != Models.Constants.EMPTY_SESSION)
                         {
-                            <ChatInput 
+                            <ChatInput @ref="chatInput"
                             UserMessage=@userMessage
                             UserMessageChanged = "OnUserMessageChanged"
                             IsResponding=@isResponding 
@@ -204,6 +204,9 @@ else
 
     //NavMenu component
     private NavMenu? NavMenu = default;
+    
+    //ChatInput component
+    private ChatInput? chatInput = default;
 
     //Supported file extensions
     private static readonly HashSet<string> SupportedDocumentExtensions = new()
@@ -378,11 +381,18 @@ else
     /// <summary>
     /// Flags that the user has requested the AI to stop responding.
     /// </summary>
-    private void Stop()
+    private async Task Stop()
     {
         if (isResponding)
         {
             stopResponding = true;
+            
+            // Wait a moment for the response to stop, then focus the input
+            await Task.Delay(100);
+            if (chatInput != null)
+            {
+                await chatInput.FocusInputAsync();
+            }
         }
     }
 
@@ -468,6 +478,12 @@ else
                     await js.InvokeVoidAsync("scrollToBottom", "MessagesInChatdiv");
                     isResponding = false;
                     StateHasChanged();
+                    
+                    // Focus back to the input textbox after AI response is complete
+                    if (chatInput != null)
+                    {
+                        await chatInput.FocusInputAsync();
+                    }
                 }
                 catch (HttpRequestException ex)
                 {
@@ -475,6 +491,12 @@ else
                     StateHasChanged();
                     Console.WriteLine($"Network error while processing chat: {ex.Message}");
                     ShowAlert($"Network error while processing chat. Please check your connection. {ex.Message}", AlertTypeEnum.danger);
+                    
+                    // Focus back to the input textbox after error
+                    if (chatInput != null)
+                    {
+                        await chatInput.FocusInputAsync();
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -482,6 +504,12 @@ else
                     StateHasChanged();
                     Console.WriteLine($"StreamChatCompletionAsync error: {ex.Message}");
                     ShowAlert($"An unexpected error occurred while processing the chat.  {ex.Message}", AlertTypeEnum.danger);
+                    
+                    // Focus back to the input textbox after error
+                    if (chatInput != null)
+                    {
+                        await chatInput.FocusInputAsync();
+                    }
                 }
             }
         }
@@ -584,12 +612,24 @@ else
             }
             isFileInputDisabled = false;
             StateHasChanged();
+            
+            // Focus back to the input textbox after file upload is complete
+            if (chatInput != null)
+            {
+                await chatInput.FocusInputAsync();
+            }
         }
         catch (IOException ex)
         {
             ShowAlert($"File upload error: {ex.Message}", AlertTypeEnum.danger);
             isFileInputDisabled = false;
             Console.WriteLine($"UploadFile error: {ex.Message}");
+            
+            // Focus back to the input textbox after error
+            if (chatInput != null)
+            {
+                await chatInput.FocusInputAsync();
+            }
         }
         catch (Exception ex)
         {
@@ -599,6 +639,12 @@ else
                 ShowAlert($"An error occurred while uploading the file. {ex.Message}.", AlertTypeEnum.danger);
             isFileInputDisabled = false;
             Console.WriteLine($"UploadFile error: {ex.Message}");
+            
+            // Focus back to the input textbox after error
+            if (chatInput != null)
+            {
+                await chatInput.FocusInputAsync();
+            }
         }
 
         await InvokeAsync(StateHasChanged);
