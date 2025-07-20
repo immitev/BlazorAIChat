@@ -21,7 +21,9 @@
                     <img style="width:25px" src="@FileUtils.GetIconForFileType(fileName)" /> @fileName
                 }
                 else
-                    @(new MarkupString(msg.Prompt))
+                {
+                    <div style="white-space: pre-wrap;">@msg.Prompt</div>
+                }
             </div>
         </div>
         <div class="toast fade show w-75 rounded-3 align-self-end">

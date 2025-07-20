@@ -2,16 +2,78 @@
 @using Microsoft.AspNetCore.Components.Web
 @inject IJSRuntime JSRuntime
 
-<div class="input-group">
-    <input @ref="inputElement" type="text" class="form-control" placeholder="Enter your message" disabled="@IsResponding" @bind-value="UserMessage" @bind-value:event="oninput" @onkeydown="HandleKeyDown" />
-    <button class="btn btn-primary" @onclick="SendMessage">Send</button>
-    <label class="btn file-selector" for="fileInput">Upload File</label>
-    <InputFile id="fileInput" @ref="InputFileRef" class="d-none" OnChange="OnFileSelected" disabled="@(IsFileInputDisabled || IsResponding)" />
-    <button class="btn btn-secondary" @onclick="OnStop">Stop</button>
+<style>
+    .chat-input-container {
+        display: flex;
+        align-items: flex-end;
+        gap: 8px;
+        padding: 12px;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        background-color: #fff;
+    }
+
+    .chat-textarea {
+        flex: 1;
+        border: none;
+        outline: none;
+        resize: none;
+        min-height: 20px;
+        max-height: 200px;
+        line-height: 1.4;
+        font-family: inherit;
+        font-size: 14px;
+        overflow-y: auto;
+        padding: 0;
+        background: transparent;
+    }
+
+    .chat-textarea::placeholder {
+        color: #6c757d;
+    }
+
+    .chat-input-buttons {
+        display: flex;
+        gap: 4px;
+        align-items: center;
+    }
+
+    .btn-sm {
+        padding: 4px 8px;
+        font-size: 12px;
+    }
+
+    .chat-input-hint {
+        font-size: 11px;
+        color: #6c757d;
+        margin-top: 4px;
+        text-align: right;
+    }
+</style>
+
+<div>
+    <div class="chat-input-container">
+        <textarea @ref="inputElement" 
+                  class="chat-textarea" 
+                  placeholder="Enter your message (Enter to send, Shift+Enter for new line)" 
+                  disabled="@IsResponding" 
+                  @bind-value="UserMessage" 
+                  @bind-value:event="oninput" 
+                  @onkeydown="HandleKeyDown"
+                  @bind-value:after="OnTextareaInput"
+                  rows="1"></textarea>
+        <div class="chat-input-buttons">
+            <button class="btn btn-primary btn-sm" @onclick="SendMessage" disabled="@IsResponding">Send</button>
+            <label class="btn btn-outline-secondary btn-sm file-selector" for="fileInput">📎</label>
+            <InputFile id="fileInput" @ref="InputFileRef" class="d-none" OnChange="OnFileSelected" disabled="@(IsFileInputDisabled || IsResponding)" />
+            <button class="btn btn-outline-danger btn-sm" @onclick="OnStop" disabled="@(!IsResponding)">Stop</button>
+        </div>
+    </div>
 </div>
 
 @code {
     private ElementReference inputElement;
+    private string _previousUserMessage = string.Empty;
 
     [Parameter]
     public string UserMessage { get; set; } = string.Empty;
@@ -34,12 +96,39 @@
     [Parameter]
     public InputFile? InputFileRef { get; set; }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JSRuntime.InvokeVoidAsync("initializeAutoResize", inputElement);
+        }
+        
+        // Reset textarea height when message is cleared (e.g., after sending)
+        if (_previousUserMessage != UserMessage)
+        {
+            _previousUserMessage = UserMessage;
+            if (string.IsNullOrEmpty(UserMessage))
+            {
+                // Small delay to avoid interfering with focus operations
+                await Task.Delay(10);
+                await JSRuntime.InvokeVoidAsync("autoResizeTextarea", inputElement);
+            }
+        }
+    }
+
     private async Task HandleKeyDown(KeyboardEventArgs e)
     {
-        if (e.Key == "Enter")
+        // Send message on Enter (but not Shift+Enter)
+        if (e.Key == "Enter" && !e.ShiftKey)
         {
             await SendMessage();
         }
+    }
+
+    private async Task OnTextareaInput()
+    {
+        // Trigger auto-resize when content changes
+        await JSRuntime.InvokeVoidAsync("autoResizeTextarea", inputElement);
     }
 
     private async Task SendMessage()
@@ -54,12 +143,34 @@
     {
         try
         {
+            // Longer delay for textarea elements to ensure they're fully initialized
+            await Task.Delay(100);
             await inputElement.FocusAsync();
         }
         catch (Exception ex)
         {
             // Silently handle focus errors as they're not critical
             Console.WriteLine($"Focus error: {ex.Message}");
+            
+            // Try alternative focus method using JavaScript with additional delay
+            try
+            {
+                await Task.Delay(50);
+                await JSRuntime.InvokeVoidAsync("focusElement", inputElement);
+            }
+            catch
+            {
+                // If both methods fail, try one more time with direct JavaScript
+                try
+                {
+                    await Task.Delay(100);
+                    await JSRuntime.InvokeVoidAsync("eval", "document.querySelector('.chat-textarea').focus()");
+                }
+                catch
+                {
+                    // Final fallback - just ignore if all methods fail
+                }
+            }
         }
     }
 }

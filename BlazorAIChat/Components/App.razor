@@ -31,6 +31,57 @@
         function clearElementValue(element) {
             element.value = '';
         }
+
+        function initializeAutoResize(textarea) {
+            if (!textarea) return;
+            
+            // Set initial height
+            autoResizeTextarea(textarea);
+            
+            // Add event listeners for various input events
+            textarea.addEventListener('input', function() {
+                autoResizeTextarea(textarea);
+            });
+            
+            textarea.addEventListener('paste', function() {
+                // Use setTimeout to allow paste content to be processed
+                setTimeout(function() {
+                    autoResizeTextarea(textarea);
+                }, 10);
+            });
+        }
+
+        function autoResizeTextarea(textarea) {
+            if (!textarea) return;
+            
+            // Reset height to auto to get the correct scrollHeight
+            textarea.style.height = 'auto';
+            
+            // Calculate the new height based on content
+            var newHeight = Math.max(20, Math.min(200, textarea.scrollHeight));
+            
+            // Set the new height
+            textarea.style.height = newHeight + 'px';
+        }
+
+        function focusElement(element) {
+            if (element && element.focus) {
+                // For textarea elements, ensure they're visible and ready
+                if (element.tagName === 'TEXTAREA') {
+                    // Scroll into view if needed
+                    element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    
+                    // Small delay to ensure scrolling is complete
+                    setTimeout(function() {
+                        element.focus();
+                        // Position cursor at the end of text
+                        element.setSelectionRange(element.value.length, element.value.length);
+                    }, 50);
+                } else {
+                    element.focus();
+                }
+            }
+        }
     </script>
 </head>
 

@@ -381,19 +381,15 @@ else
     /// <summary>
     /// Flags that the user has requested the AI to stop responding.
     /// </summary>
-    private async Task Stop()
+    private Task Stop()
     {
         if (isResponding)
         {
             stopResponding = true;
-            
-            // Wait a moment for the response to stop, then focus the input
-            await Task.Delay(100);
-            if (chatInput != null)
-            {
-                await chatInput.FocusInputAsync();
-            }
+            // Note: isResponding will be set to false in the main SendMessage flow
+            // to ensure proper cleanup and state management
         }
+        return Task.CompletedTask;
     }
 
     private async Task OnUserMessageChanged(string message)
@@ -460,6 +456,35 @@ else
                         StateHasChanged();
 
                     }
+
+                    // Check if the response was stopped by the user
+                    if (stopResponding)
+                    {
+                        // Handle stopped response
+                        message.Completion = markdownBuilder.ToString();
+                        message.CompletionTimeStamp = DateTime.UtcNow;
+                        
+                        // Store whatever partial response we have
+                        if (!string.IsNullOrEmpty(markdownBuilder.ToString()))
+                        {
+                            aiService.history.AddAssistantMessage(markdownBuilder.ToString());
+                            await UpdateSessionAndMessage(currentSession?.Id ?? string.Empty, message);
+                        }
+                        
+                        // Ensure UI is updated to show stopped state
+                        isResponding = false;
+                        StateHasChanged();
+                        
+                        // Focus back to input
+                        if (chatInput != null)
+                        {
+                            await chatInput.FocusInputAsync();
+                        }
+                        
+                        return; // Exit early, don't continue with normal completion flow
+                    }
+
+                    // Normal completion flow (not stopped)
                     message.Completion = markdownBuilder.ToString();
                     message.CompletionTimeStamp = DateTime.UtcNow;
                     aiService.history.AddAssistantMessage(markdownBuilder.ToString());
